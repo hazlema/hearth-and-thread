@@ -1,0 +1,1277 @@
+{
+  "meta": {
+    "id": "v_20261025-013142_326f",
+    "name": "Before final design review",
+    "at": "2026-10-25T01:31:42.827Z",
+    "author": "claude",
+    "auto": false,
+    "stats": {
+      "groups": 9,
+      "entries": 64,
+      "notes": 0,
+      "pictures": 1,
+      "cards": 25
+    }
+  },
+  "content": {
+    "title": "tic-tac-toe",
+    "brief": {
+      "sections": [
+        {
+          "id": "s_af73a280",
+          "title": "What we're building",
+          "text": "Roguelite tic-tac-toe vs an AI. Juicy: dynamic colors, animations, WebAudio sound. Single-page web, no assets. Five mechanics, no more.\n\n1. Ladder: 5 levels, max 3 boards each (a draw burns one, no draft, powers kept; out of boards = run over). X line clears the level + draft. Second Wind (once per run) cancels the first run-ending event: after an O line it replays a fresh board with hearts unchanged; after the last board burns it grants 1 heart. No draft. L5 clear = victory. Run ~8 min.\n Score: +100 per level cleared, +50 per heart left at the clear, +25 per power spent this level. The card shows score vs best.\n2. Powers: Shatter, Slide, Ward. Each includes your placement; 1 per turn; hold 3; preview before confirming. Start: pick 1 of 3. Draft 1 of 3 per cleared level (swap or skip at cap). The L4 to L5 draft can't be skipped while you hold 0 powers.\n Core tension: spend powers for score and spectacle now, or save them, because L5 is only winnable with a power in hand.\n3. AI blunder rate: L1 80%, L2 40%, L3 25%, L4 10%, L5 0% (minimax with powers/shields in search). Each draw adds +10% for the rest of the level (visible hesitation). L1-L3: blunder rolls first and may miss a win/block. L4-L5: take an immediate win first, blunder only on the follow-up.\n4. Level setups (never stack; reset per board, keep inventory):\n L1 empty, X starts.\n L2 rock top-left (blocks cells and lines; Shatter can remove it).\n L3 seeds X top-left, O bottom-right, X starts (Slide shines).\n L4 empty, O starts (hardest board).\n L5 O owns one Ward per board (place O + shield one empty cell, shown before X's turn, expires after X's action, must leave X a legal move).\n5. Heat (cosmetic only, shown as the HEARTH gauge): +1 per placement, +2 per power spent, +3 on your line, cap 10, reset per board (a Second Wind also clears the grey). A power-assisted win maxes the HEARTH exactly on the golden seam. Drives palette, music layers, particles, power effect size. Marks stay readable at Heat 10.\n\nPowers: Shatter = remove one O (or rock), place X elsewhere. Slide = move one X, then place X; lines resolve after. Ward = place X, shield one empty cell from the next AI move; must leave AI a legal reply unless you win.\nA winning player action ends the board before the AI replies. Draw = no playable empty cells, no line.\n\nWin beat: a 700ms golden line sews across, the HEARTH flares, a rising music-box run plays. Loss beat: the O line pulses, the last two moves replay in 1s slow-mo, the quilt unravels and goes grey with a falling tone. Then a card: level reached, score vs best, one-tap \"Again\" (new run in under 1s). Second Wind re-knits the threads with a rising chime instead.\nCut: Echo, Rewind, charge economy, shifting corners, O-center seed, O's Ward costing her turn.",
+          "updatedBy": "claude",
+          "updatedAt": "2026-10-25T01:26:23.663Z"
+        },
+        {
+          "id": "s_e9c3c2e5",
+          "title": "QA bar (playtest)",
+          "text": "Loud and clear. Before we pick a twist, the bar it must clear:\n- Rules legible in one glance; a first-timer must not lose by confusion.\n- A decision on turn 3 that still matters on turn 9 (no dead moves).\n- Doing nothing must feel bad — pass/skip should cost something.\n- No first-player win guaranteed by opening book; if solved, the board must hide it.\nAnything that fails two of these gets cut, not patched.",
+          "updatedBy": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+          "updatedAt": "2026-10-25T00:45:46.915Z"
+        },
+        {
+          "id": "s_9592a96e",
+          "title": "Implementation handoff: reducer source",
+          "text": "FEATURE FREEZE until the files are extracted and the tests have run.\n\nSource cards (all unexecuted): rules v2 + tests, controller v3 + tests, the v3 UI patch, hud, board v2 (SVG), ai.worker, app, audio + wiring patch. Still missing: scene art, animation polish. Copy into a JS workspace, serve over HTTP, run node --test.\n\nRulings:\n- Search uses isLegal plus an unchecked apply; the public API keeps the full check. Iterative deepening with alpha-beta, max 6 plies, ~300ms; X powers searched through ply 4.\n- Worker requests carry a revision; mismatched replies are dropped. Controller watchdog at 1.2s: bump the revision (that's what guarantees a late reply is ignored), call cancelAI() (cleanup only, don't rely on it rejecting), clear inFlight, play tacticalFallback (win, else block, else center).\n- Phases: draft | player | ai | won | lost | transition | victory | defeat. 'won' = 700ms, and taps are swallowed for the first 250ms. 'lost' = 1s, and every defeat path uses it.\n- Draft: confirm tap; skip is free, except that the L4 to L5 draft can't be skipped at 0 powers.\n- Preview cancel: tap the same cell, tap outside, or Esc; nothing is spent.\n- Hearts refill one at a time with a stitch sound on level clear.\n- Audio: unlocked by a gesture, muteable, silent in previews and search. The game must be fully playable muted.\n- Build gates: L5 fixtures pass (the control must not win). L5 clear rate over 200 seeded boards: 55-70% entering with 1 power, under 85% entering with 3.",
+          "updatedBy": "claude",
+          "updatedAt": "2026-10-25T01:26:23.667Z"
+        },
+        {
+          "id": "s_305d119b",
+          "title": "Art direction: Hearth & Thread (reference = concept picture)",
+          "text": "Cozy cottage at night with rain on the window. You play against Granny Owl, who knits across the table.\n- Board: ivory linen with stitched grid lines and floral corners, on a walnut table.\n- X = berry cross-stitch, O = deep-teal button, both saturated, each with a 1px ivory stitch halo so they read at Heat 10.\n- Ward = an upturned teacup on a dark walnut coaster, with a dashed stitched cell outline (blocked, not occupied).\n- HUD: 5 house pips at top-left = level. 3 heart buttons at top-right = boards left. 'HEARTH' gauge at left = Heat. Sewing tray at the bottom = powers: scissors (Shatter), spool with arrow (Slide), teacup (Ward), each with a count.\n- Above Heat 7, vignette the decor so the marks and particles are always the brightest things on screen.\n- Owl = the AI's tells: sleepier after each draw (spectacles slip, yawn); she sets down her teacup before her L5 Ward.\n- L2 rock = a sleeping cat; Shatter shoos it off.\n- Animation: the scissors snip and the button pops off; the thread tugs and the stitch glides; a win sews a golden line; a loss unravels and goes grey; Second Wind re-knits.\n- Palette: ivory #F4E9D8, walnut #6B4A35, berry #B5485A, teal #2F5D6B, honey #E8A84A, night #2A3348.",
+          "updatedBy": "claude",
+          "updatedAt": "2026-10-25T01:17:18.873Z"
+        }
+      ]
+    },
+    "flow": {
+      "nodes": [
+        {
+          "id": "n_02c642f5",
+          "title": "Fresh board: apply level setup",
+          "notes": "On level entry, draw retry or Second Wind: clear marks/shields, apply this level's setup (L3 seeds, L4 O starts, L5 Ward). Keep powers; reset Heat. No starter draft on retry.",
+          "props": [],
+          "status": "idea",
+          "author": "claude",
+          "x": 0,
+          "y": 0,
+          "createdAt": "2026-10-25T00:55:31.109Z",
+          "updatedAt": "2026-10-25T00:58:05.589Z",
+          "updatedBy": "claude"
+        },
+        {
+          "id": "n_39dd2971",
+          "title": "Player: place X or spend a power",
+          "notes": "Sol proposal: powers include a placement, not a separate setup turn. Validate the complete action before committing; consume only on confirmation. Check for a line immediately after the completed action: player win goes directly to reward, never give AI a reply after a winning move. Otherwise AI acts; if no legal move remains, resolve draw.",
+          "props": [],
+          "status": "idea",
+          "author": "claude",
+          "x": 300,
+          "y": 0,
+          "createdAt": "2026-10-25T00:55:34.740Z",
+          "updatedAt": "2026-10-25T00:56:14.371Z",
+          "updatedBy": "agent:openai/gpt-6.1-sol=systems"
+        },
+        {
+          "id": "n_f7ccba28",
+          "title": "AI turn",
+          "notes": "",
+          "props": [],
+          "status": "idea",
+          "author": "claude",
+          "x": 600,
+          "y": 0,
+          "createdAt": "2026-10-25T00:55:36.956Z",
+          "updatedAt": "2026-10-25T00:55:36.956Z",
+          "updatedBy": "claude"
+        },
+        {
+          "id": "n_5c5e7f6d",
+          "title": "Resolve AI line / draw / continue",
+          "notes": "After AI action: O line = Second Wind (once) else run over. No playable empty cells = draw. Otherwise player turn. Expire shield before handing control. Heat cosmetic.",
+          "props": [],
+          "status": "idea",
+          "author": "claude",
+          "x": 900,
+          "y": 0,
+          "createdAt": "2026-10-25T00:55:36.957Z",
+          "updatedAt": "2026-10-25T00:58:04.950Z",
+          "updatedBy": "claude"
+        },
+        {
+          "id": "n_e2249be5",
+          "title": "Game won: draft 1 of 3 power-ups",
+          "notes": "",
+          "props": [],
+          "status": "idea",
+          "author": "claude",
+          "x": 1200,
+          "y": 0,
+          "createdAt": "2026-10-25T00:55:36.958Z",
+          "updatedAt": "2026-10-25T00:55:36.958Z",
+          "updatedBy": "claude"
+        },
+        {
+          "id": "n_f5dd32c6",
+          "title": "Run over: score kept",
+          "notes": "Loss beat: line pulses, 1s slow-mo replay, Heat drains to grey, board shatters. Card: level, score vs best, one-tap Again. Boards exhausted uses the same beat.",
+          "props": [],
+          "status": "idea",
+          "author": "claude",
+          "x": 1200,
+          "y": 104,
+          "createdAt": "2026-10-25T00:55:36.959Z",
+          "updatedAt": "2026-10-25T00:59:16.525Z",
+          "updatedBy": "claude"
+        },
+        {
+          "id": "n_f2291fde",
+          "title": "Draw: burn a board, no draft",
+          "notes": "Full board, no line = draw. Burns a board, no draft, powers kept. Out of boards = run over.",
+          "props": [],
+          "status": "idea",
+          "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+          "x": 1200,
+          "y": 208,
+          "createdAt": "2026-10-25T00:56:34.891Z",
+          "updatedAt": "2026-10-25T00:56:49.966Z",
+          "updatedBy": "claude"
+        },
+        {
+          "id": "n_d0473161",
+          "title": "Run complete: victory + score",
+          "notes": "Clearing L5 ends the run as a win: full-screen payoff, Heat-driven finale, high score saved. The only exit after the last draft.",
+          "props": [],
+          "status": "idea",
+          "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+          "x": 1500,
+          "y": 0,
+          "createdAt": "2026-10-25T00:57:48.481Z",
+          "updatedAt": "2026-10-25T00:57:48.481Z",
+          "updatedBy": "agent:deepseek/deepseek-v4.1-flash-1017=qa"
+        },
+        {
+          "id": "n_cfdca189",
+          "title": "Source: rules.mjs v2 (unexecuted)",
+          "notes": "Copy into rules.mjs. Pure board logic; not executed here. applyAction returns {position,events} or {error}; callers must check error before using position. canApply accepts incomplete/null action input safely; state must satisfy the schema.\n\nconst LINES=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];\nconst other=p=>p==='X'?'O':'X';\nconst wins=(c,p)=>LINES.some(l=>l.every(i=>c[i]===p));\nconst key=a=>JSON.stringify([a.type,a.at,a.remove,a.from,a.to,a.shieldCell??null]);\nconst clone=s=>({...s,cells:[...s.cells],powersX:{...s.powersX},shield:s.shield?{...s.shield}:null});\nexport function initial(cells=Array(9).fill(null),toMove='X',powersX={},wardO=0){\n return {cells:[...cells],toMove,powersX:{shatter:0,slide:0,ward:0,...powersX},wardO,shield:null,result:'playing'};\n}\nexport function legalActions(s){\n if(s.result!=='playing')return [];\n const p=s.toMove,c=s.cells,out=[];\n const blocked=i=>s.shield?.blockedActor===p&&s.shield.cell===i;\n const free=(b,i)=>b[i]===null&&!blocked(i);\n const has=t=>p==='X'?s.powersX[t]>0:t==='ward'&&s.wardO>0;\n for(let at=0;at<9;at++)if(free(c,at)){\n  out.push({type:'Place',at});\n  if(has('ward')){\n   const b=[...c];b[at]=p;\n   if(wins(b,p))out.push({type:'Ward',at,shieldCell:null});\n   else {\n    const empties=b.flatMap((v,i)=>v===null?[i]:[]);\n    if(empties.length>=2)for(const shieldCell of empties)out.push({type:'Ward',at,shieldCell});\n   }\n  }\n }\n if(has('shatter'))for(let remove=0;remove<9;remove++)if(c[remove]===other(p)||c[remove]==='rock'){\n  for(let at=0;at<9;at++)if(at!==remove&&free(c,at))out.push({type:'Shatter',remove,at});\n }\n if(has('slide'))for(let from=0;from<9;from++)if(c[from]===p){\n  for(let to=0;to<9;to++)if(free(c,to)){\n   const b=[...c];b[from]=null;b[to]=p;\n   for(let at=0;at<9;at++)if(free(b,at))out.push({type:'Slide',from,to,at});\n  }\n }\n return out;\n}\nfunction findAction(s,a){\n if(!a||typeof a!=='object')return undefined;\n const fields=['at','remove','from','to','shieldCell'];\n if(typeof a.type!=='string'||fields.some(f=>a[f]!=null&&(!Number.isInteger(a[f])||a[f]<0||a[f]>8)))return undefined;\n const wanted=key(a);\n return legalActions(s).find(x=>key(x)===wanted);\n}\nexport const canApply=(s,a)=>Boolean(findAction(s,a));\nexport function applyAction(s,a){\n const action=findAction(s,a);\n if(!action)return {error:'ILLEGAL_ACTION'};\n const n=clone(s),p=s.toMove,events=[];\n if(action.type==='Shatter')n.cells[action.remove]=null;\n if(action.type==='Slide'){n.cells[action.from]=null;n.cells[action.to]=p;}\n n.cells[action.at]=p;\n if(action.type!=='Place'){\n  if(p==='X')n.powersX[action.type.toLowerCase()]--;else n.wardO--;\n  events.push({type:'power',actor:p,power:action.type});\n }\n if(n.shield)events.push({type:'shieldExpired',cell:n.shield.cell});\n n.shield=null;\n n.result=wins(n.cells,p)?p:n.cells.includes(null)?'playing':'draw';\n if(n.result==='playing'&&action.type==='Ward'){\n  n.shield={cell:action.shieldCell,blockedActor:other(p)};\n  events.push({type:'shieldCreated',...n.shield});\n }\n events.push({type:'placement',actor:p,cell:action.at});\n if(n.result!=='playing')events.push({type:'terminal',result:n.result});\n else n.toMove=other(p);\n return {position:n,events};\n}\n",
+          "props": [],
+          "status": "idea",
+          "author": "agent:openai/gpt-6.1-sol=systems",
+          "x": 0,
+          "y": 450,
+          "createdAt": "2026-10-25T00:59:45.111Z",
+          "updatedAt": "2026-10-25T01:01:30.947Z",
+          "updatedBy": "agent:openai/gpt-6.1-sol=systems"
+        },
+        {
+          "id": "n_d9c6052f",
+          "title": "Source: rules.test.mjs v2 (unexecuted)",
+          "notes": "Copy beside rules.mjs; run node --test rules.test.mjs. Not run here.\n\nimport test from 'node:test';\nimport assert from 'node:assert/strict';\nimport {initial,legalActions,canApply,applyAction} from './rules.mjs';\nconst play=(s,a)=>{const r=applyAction(s,a);assert.equal(r.error,undefined);return r.position;};\n\ntest('ordinary win terminates before AI reply',()=>{\n const s=initial(['X','X',null,'O','O',null,null,null,null]);\n const n=play(s,{type:'Place',at:2});\n assert.equal(n.result,'X');assert.deepEqual(legalActions(n),[]);\n});\ntest('Shatter cannot convert; rejection is nonthrowing and pure',()=>{\n const s=initial(['O',null,null,null,null,null,null,null,null],'X',{shatter:1});\n const before=JSON.stringify(s),a={type:'Shatter',remove:0,at:0};\n assert.equal(canApply(s,a),false);assert.deepEqual(applyAction(s,a),{error:'ILLEGAL_ACTION'});\n assert.equal(JSON.stringify(s),before);\n const n=play(s,{type:'Shatter',remove:0,at:1});\n assert.equal(n.cells[0],null);assert.equal(n.cells[1],'X');assert.equal(n.powersX.shatter,0);\n});\ntest('incomplete and malformed preview actions reject safely',()=>{\n const s=initial();\n for(const a of [null,undefined,{}, {type:'Place'}, {type:'Place',at:99}, {type:'Place',at:'0'}]){\n  assert.equal(canApply(s,a),false);assert.equal(applyAction(s,a).error,'ILLEGAL_ACTION');\n }\n});\ntest('Shatter clears rock',()=>{\n const s=initial(['rock',null,null,null,null,null,null,null,null],'X',{shatter:1});\n assert.equal(play(s,{type:'Shatter',remove:0,at:4}).cells[0],null);\n});\ntest('Slide permits vacated origin',()=>{\n const s=initial(['X',null,null,null,null,null,null,null,null],'X',{slide:1});\n const n=play(s,{type:'Slide',from:0,to:4,at:0});\n assert.equal(n.cells[0],'X');assert.equal(n.cells[4],'X');assert.equal(n.powersX.slide,0);\n});\ntest('AI Ward blocks Slide destinations, then expires',()=>{\n const s=initial(['X',null,null,null,null,null,null,null,null],'O',{slide:1},1);\n const ward=play(s,{type:'Ward',at:8,shieldCell:4});\n assert.equal(ward.shield.blockedActor,'X');assert.equal(ward.wardO,0);\n assert(!legalActions(ward).some(a=>a.at===4||a.to===4));\n const n=play(ward,{type:'Slide',from:0,to:1,at:0});\n assert.equal(n.shield,null);assert.equal(n.toMove,'O');\n});\ntest('shield blocks Shatter placement, not its unshielded alternative',()=>{\n const s=initial(['O',null,null,null,null,null,null,null,null],'X',{shatter:1});\n s.shield={cell:4,blockedActor:'X'};\n assert.equal(canApply(s,{type:'Shatter',remove:0,at:4}),false);\n assert.equal(applyAction(s,{type:'Shatter',remove:0,at:4}).error,'ILLEGAL_ACTION');\n assert(!legalActions(s).some(a=>a.type==='Shatter'&&a.at===4));\n const n=play(s,{type:'Shatter',remove:0,at:1});\n assert.equal(n.shield,null);assert.equal(n.powersX.shatter,0);\n});\ntest('new Ward survives old Ward expiration',()=>{\n const s=initial(['X',null,null,null,null,null,null,null,'O'],'X',{ward:1});\n s.shield={cell:4,blockedActor:'X'};\n assert.deepEqual(play(s,{type:'Ward',at:1,shieldCell:2}).shield,{cell:2,blockedActor:'O'});\n});\ntest('Ward cannot remove last reply when neither placement wins',()=>{\n const s=initial(['X','O','X','X','O','O','O',null,null],'X',{ward:1});\n assert(!legalActions(s).some(a=>a.type==='Ward'));\n assert.equal(canApply(s,{type:'Place',at:7}),true);\n assert.equal(canApply(s,{type:'Place',at:8}),true);\n});\ntest('winning Ward needs no shieldCell',()=>{\n const s=initial(['X','X',null,'O','O',null,null,null,null],'X',{ward:1});\n assert.equal(canApply(s,{type:'Ward',at:2}),true);\n const n=play(s,{type:'Ward',at:2});\n assert.equal(n.result,'X');assert.equal(n.shield,null);assert.equal(n.powersX.ward,0);\n});\ntest('extra Ward copies do not duplicate action branches',()=>{\n const one=initial(Array(9).fill(null),'X',{ward:1});\n for(const count of [2,3]){\n  const many={...one,powersX:{...one.powersX,ward:count}};\n  const actions=legalActions(many);\n  assert.deepEqual(actions,legalActions(one));\n  assert.equal(new Set(actions.map(a=>JSON.stringify(a))).size,actions.length);\n  assert.equal(play(many,{type:'Ward',at:0,shieldCell:1}).powersX.ward,count-1);\n }\n});\ntest('rock-filled board draws despite held power',()=>{\n const s=initial(['X','O','X','X','O','O','O',null,'rock'],'X',{shatter:1});\n assert.equal(play(s,{type:'Place',at:7}).result,'draw');\n});\ntest('enumerated actions apply without input mutation',()=>{\n const s=initial(['X',null,null,null,'O',null,null,null,null],'X',{slide:1,ward:1,shatter:1});\n const before=JSON.stringify(s);\n for(const a of legalActions(s)){\n  assert.equal(canApply(s,a),true);\n  const n=play(s,a);assert.equal(JSON.stringify(s),before);\n  assert(n.powersX.slide>=0&&n.powersX.ward>=0&&n.powersX.shatter>=0);\n }\n});",
+          "props": [],
+          "status": "idea",
+          "author": "agent:openai/gpt-6.1-sol=systems",
+          "x": 300,
+          "y": 450,
+          "createdAt": "2026-10-25T00:59:57.297Z",
+          "updatedAt": "2026-10-25T01:01:42.543Z",
+          "updatedBy": "agent:openai/gpt-6.1-sol=systems"
+        },
+        {
+          "id": "n_796e565e",
+          "title": "QA: reducer review — passes, 3 fixes",
+          "notes": "By inspection (not executed). PASS: atomic powers, shield handoff, rock clear, immediate win, no input mutation, no board-full stall possible (draw is caught on the action that fills the board).\n\nFIX 1: applyAction throws. The UI preview and the AI walk illegal branches by accident — a throw mid-animation is a crash card. Return {error} or add canApply(a); test with canApply, not throws.\nFIX 2: missing tests, all cheap: shield blocks Shatter's `at` (only Slide's at/to is covered — a regression lets Shatter bypass the shield); a Ward that wins needs no shieldCell; powersX.ward=2 decrements once and yields one action; O never sees X's powers; L3 seeded first Slide cannot end the board in one action (it can't — only 2 X's land — so L3 is safe, the real risk is Slide twice).\nFIX 3 (perf): memo key carries inventory+shield, so it barely hits; root branching with all three powers is ~200 actions. Cap search at ~6 plies or prune power branches beyond that. A 1.5s AI pause kills the whole juice layer.",
+          "props": [
+            {
+              "key": "status",
+              "value": "Foreman: all 3 fixes accepted; also found a test bug (see Brief handoff)"
+            }
+          ],
+          "status": "idea",
+          "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+          "x": 0,
+          "y": 660,
+          "createdAt": "2026-10-25T01:00:41.534Z",
+          "updatedAt": "2026-10-25T01:01:01.567Z",
+          "updatedBy": "claude"
+        },
+        {
+          "id": "n_4747981a",
+          "title": "Lost: 1s unravel beat",
+          "notes": "O line: the gold line flips to grey, the quilt unravels and the candle snuffs out. Then Second Wind (re-knit) or the run-over card.",
+          "props": [],
+          "status": "idea",
+          "author": "claude",
+          "x": 1050,
+          "y": 300,
+          "createdAt": "2026-10-25T01:14:35.569Z",
+          "updatedAt": "2026-10-25T01:14:35.569Z",
+          "updatedBy": "claude"
+        },
+        {
+          "id": "n_a99ef3f5",
+          "title": "Source: controller.mjs v4 (unexecuted)",
+          "notes": "Copy beside rules.mjs and ai.worker.mjs. Not executed. v4 adds a controller-owned 1.2s watchdog and event-based Heat. cancelAI is cleanup only; revision/inFlight guards guarantee stale replies cannot commit. Keep the v3 UI patch. Heat: +1 per placement, +2 per power (either actor), +3 for an X line, capped at 10; reset on every fresh board.\n\nimport {initial,canApply,applyAction} from './rules.mjs';\nimport {tacticalFallback} from './ai.worker.mjs';\nconst TYPES=['shatter','slide','ward'];\nexport function createController({render,requestAI,cancelAI=()=>{},onOutcome=()=>{},later=setTimeout,reducedMotion=false,now=()=>performance.now()}){\n let revision=0,inFlight=null,s;\n const snapshot=()=>structuredClone(s),publish=()=>render(snapshot());\n const locked=()=>now()<s.inputLockedUntil;\n function cancelWork(){try{cancelAI();}catch{/* Cleanup failure must not freeze play. */}}\n function stopAI(){const active=inFlight!==null;inFlight=null;if(active)cancelWork();}\n function wait(ms,fn){const r=revision,phase=s.phase;later(()=>{if(r===revision&&s.phase===phase)fn();},ms);}\n function guard(){s.inputLockedUntil=now()+250;wait(250,publish);}\n function end(phase){s.phase=phase;publish();onOutcome(snapshot());}\n function newRun(){\n  stopAI();revision++;\n  s={revision,phase:'draft',level:1,drawsThisLevel:0,boardsLeft:3,secondWindAvailable:true,heat:0,score:0,powersSpentThisLevel:0,\n   inventory:{shatter:0,slide:0,ward:0},position:null,events:[],starterDraft:true,lossReason:null,inputLockedUntil:0};publish();\n }\n function freshBoard(){\n  stopAI();revision++;s.revision=revision;\n  const cells=Array(9).fill(null);\n  if(s.level===2)cells[0]='rock';if(s.level===3){cells[0]='X';cells[8]='O';}\n  s.position=initial(cells,s.level===4?'O':'X',s.inventory,s.level===5?1:0);\n  s.heat=0;s.events=[];s.lossReason=null;s.inputLockedUntil=0;\n  s.phase=s.position.toMove==='X'?'player':'ai';publish();kickAI();\n }\n function draft(type,replace=null){\n  if(s.phase!=='draft'||locked())return false;\n  const total=Object.values(s.inventory).reduce((a,b)=>a+b,0);\n  if(type===null){if(s.starterDraft||(s.level===5&&total===0))return false;}\n  else {\n   if(!TYPES.includes(type))return false;\n   if(total>=3){if(!TYPES.includes(replace)||s.inventory[replace]<1)return false;s.inventory[replace]--;}\n   s.inventory[type]++;\n  }\n  s.starterDraft=false;freshBoard();return true;\n }\n function lose(reason){\n  s.phase='lost';s.lossReason=reason;publish();\n  wait(reducedMotion?0:1000,()=>{\n   if(s.secondWindAvailable){\n    s.secondWindAvailable=false;\n    if(reason==='boards')s.boardsLeft=1;\n    freshBoard();\n   }else end('defeat');\n  });\n }\n function settle(){\n  const result=s.position.result;\n  if(result==='X'){\n   if(s.level===5){end('victory');return;}\n   const from=s.boardsLeft;\n   s.level++;s.drawsThisLevel=0;s.boardsLeft=3;s.powersSpentThisLevel=0;\n   s.phase='draft';s.events=[{type:'heartsRefill',from,to:3}];guard();publish();return;\n  }\n  if(result==='draw'){\n   s.drawsThisLevel++;s.boardsLeft--;\n   if(s.boardsLeft===0){lose('boards');return;}\n   freshBoard();return;\n  }\n  s.phase=s.position.toMove==='X'?'player':'ai';publish();kickAI();\n }\n function skipWon(){if(s.phase!=='won'||locked())return false;settle();return true;}\n function commit(action,actor='X'){\n  if((actor==='X'&&(s.phase!=='player'||locked()))||(actor==='O'&&s.phase!=='ai'))return false;\n  if(s.position.toMove!==actor)return false;\n  const r=applyAction(s.position,action);if(r.error)return false;\n  revision++;s.revision=revision;s.position=r.position;s.inventory={...r.position.powersX};s.events=r.events;\n  const spent=r.events.filter(e=>e.type==='power'&&e.actor==='X').length;\n  s.powersSpentThisLevel+=spent;s.score+=25*spent;\n  const placements=r.events.filter(e=>e.type==='placement').length;\n  const powers=r.events.filter(e=>e.type==='power').length;\n  s.heat=Math.min(10,s.heat+placements+2*powers+(r.position.result==='X'?3:0));\n  if(r.position.result==='O')lose('line');\n  else if(r.position.result==='X'){\n   s.score+=100+50*s.boardsLeft;s.phase='won';guard();publish();wait(reducedMotion?250:700,settle);\n  }else{s.phase='transition';publish();wait(reducedMotion?0:300,settle);}\n  return true;\n }\n function kickAI(){\n  if(s.phase!=='ai'||inFlight!==null)return;\n  const r=revision;inFlight=r;\n  const current=()=>inFlight===r&&revision===r&&s.phase==='ai';\n  const payload={revision:r,position:structuredClone(s.position),level:s.level,drawsThisLevel:s.drawsThisLevel};\n  function receive(reply){\n   if(!current())return;\n   inFlight=null;\n   const a=reply?.revision===r&&canApply(s.position,reply.action)?reply.action:tacticalFallback(s.position);\n   if(a)commit(a,'O');\n  }\n  later(()=>{\n   if(!current())return;\n   // Invalidate BEFORE cleanup: cancelAI need not settle its promise.\n   revision++;s.revision=revision;inFlight=null;cancelWork();\n   const a=tacticalFallback(s.position);\n   if(a&&canApply(s.position,a))commit(a,'O');\n  },1200);\n  try{Promise.resolve(requestAI(payload)).then(receive,()=>receive(null));}catch{receive(null);}\n }\n function preview(action){return s.phase==='player'&&!locked()?applyAction(s.position,action):{error:'INPUT_LOCKED'};}\n newRun();\n return {newRun,draft,preview,skipWon,commit:action=>commit(action,'X'),getState:snapshot};\n}\n",
+          "props": [],
+          "status": "idea",
+          "author": "agent:openai/gpt-6.1-sol=systems",
+          "x": 600,
+          "y": 450,
+          "createdAt": "2026-10-25T01:15:21.268Z",
+          "updatedAt": "2026-10-25T01:26:48.587Z",
+          "updatedBy": "agent:openai/gpt-6.1-sol=systems"
+        },
+        {
+          "id": "n_1b8034a4",
+          "title": "Source: hud.mjs + HUD CSS (unexecuted)",
+          "notes": "HUD only; board renderer and scene art remain separate. Uses the approved reference's hierarchy, not the picture as a baked-in clickable board. Copy JS into hud.mjs; CSS into stylesheet. No assets generated. Not executed.\n\nexport function createHUD(root,{onDraft,onAgain,onPower}){\n let last=null,selected=null,replace=null,draftKey='';\n const powers=[['shatter','✂','Shatter'],['slide','↷','Slide'],['ward','☕','Ward']];\n function render(s){\n  last=s;\n  const nextKey=s.phase==='draft'?`${s.level}:${s.starterDraft}`:'';\n  if(nextKey!==draftKey){selected=null;replace=null;draftKey=nextKey;}\n  const left=3-s.drawsThisLevel;\n  const inv=s.inventory,total=Object.values(inv).reduce((a,b)=>a+b,0);\n  const phaseText={draft:'Choose a sewing tool',player:'Your stitch',ai:'Granny Owl is thinking',lost:'The quilt unravels…',transition:'Threading…',victory:'A quilt well made!',defeat:'Shall we stitch again?'}[s.phase];\n  const shield=s.position?.shield;\n  root.innerHTML=`\n   <header class=\"cottage-hud\">\n    <ol class=\"houses\" aria-label=\"Level ${s.level} of 5\">${[1,2,3,4,5].map(n=>`<li class=\"house ${n===s.level?'current':''}\" ${n===s.level?'aria-current=\"step\"':''}>${n}</li>`).join('')}</ol>\n    <div class=\"attempts\" aria-label=\"${left} board attempts left\"><span aria-hidden=\"true\">${'♥'.repeat(left)}${'♡'.repeat(3-left)}</span><small>Boards left: ${left}/3</small></div>\n   </header>\n   <p class=\"turn-status\" role=\"status\">${phaseText}</p>\n   <aside class=\"hearth\"><label for=\"hearth-gauge\">HEARTH</label><meter id=\"hearth-gauge\" min=\"0\" max=\"10\" value=\"${s.heat}\">${s.heat}/10</meter><span>${s.heat}/10</span></aside>\n   <p class=\"ward-status\">${shield?`Teacup: blocked for ${shield.blockedActor==='X'?'your':'Owl’s'} next move; lifts after that action.`:'No cell shielded.'}</p>\n   <small>Second Wind: ${s.secondWindAvailable?'ready':'used'} · Owl Ward: ${s.level===5?(s.position?.wardO?'ready':'used'):'—'}</small>\n   <nav class=\"sewing-tray\" aria-label=\"Power tools\">${powers.map(([id,icon,name])=>`<button data-power=\"${id}\" ${s.phase!=='player'||!inv[id]?'disabled':''}><span aria-hidden=\"true\">${icon}</span>${name} ×${inv[id]}</button>`).join('')}</nav>\n   ${s.phase==='draft'?`<section class=\"draft\" aria-label=\"Choose a power\">\n    <div>${powers.map(([id,icon,name])=>`<button data-pick=\"${id}\" aria-pressed=\"${selected===id}\">${icon} ${name}</button>`).join('')}</div>\n    ${total>=3?`<p>Tray full: choose a tool to replace.</p>${powers.filter(([id])=>inv[id]).map(([id,,name])=>`<button data-replace=\"${id}\" aria-pressed=\"${replace===id}\">${name} ×${inv[id]}</button>`).join('')}`:''}\n    <button data-confirm ${!selected||(total>=3&&!replace)?'disabled':''}>Keep tool</button>\n    ${s.starterDraft?'':'<button data-skip>Skip</button>'}</section>`:''}\n   ${['victory','defeat'].includes(s.phase)?'<button data-again>Again</button>':''}`;\n  root.querySelectorAll('[data-power]').forEach(b=>b.onclick=()=>onPower(b.dataset.power));\n  root.querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>{selected=b.dataset.pick;render(last);});\n  root.querySelectorAll('[data-replace]').forEach(b=>b.onclick=()=>{replace=b.dataset.replace;render(last);});\n  const confirm=root.querySelector('[data-confirm]');if(confirm)confirm.onclick=()=>onDraft(selected,replace);\n  const skip=root.querySelector('[data-skip]');if(skip)skip.onclick=()=>onDraft(null);\n  const again=root.querySelector('[data-again]');if(again)again.onclick=onAgain;\n }\n return render;\n}\n\n/* CSS */\n.cottage-hud{display:flex;justify-content:space-between;gap:1rem;color:#F4E9D8;background:#2A3348;padding:.75rem;border-radius:1rem}\n.houses{display:flex;gap:.4rem;list-style:none;margin:0;padding:0}\n.house{border:2px solid #F4E9D8;border-radius:.7rem .7rem .2rem .2rem;padding:.35rem .6rem}\n.house.current{background:#E8A84A;color:#2A3348;outline:2px solid #F4E9D8;outline-offset:2px}\n.attempts{display:grid;color:#F4E9D8}.attempts>span{color:#F4E9D8;letter-spacing:.25rem}\n.turn-status,.ward-status{background:#F4E9D8;color:#2A3348;padding:.5rem;border-radius:.5rem}\n.hearth{display:flex;align-items:center;gap:.5rem;background:#6B4A35;color:#F4E9D8;padding:.5rem;border-radius:.5rem}\n.sewing-tray,.draft{display:flex;flex-wrap:wrap;gap:.5rem;padding:.75rem;background:#6B4A35;border-radius:1rem}\n.draft{display:block;color:#F4E9D8}.draft>div{display:flex;flex-wrap:wrap;gap:.5rem}\n.sewing-tray button,.draft button{min-height:48px;min-width:48px;padding:.6rem;background:#F4E9D8;color:#2A3348;border:2px solid #2F5D6B;border-radius:.7rem;font:inherit}\n.sewing-tray button span{display:block;font-size:1.5rem}\nbutton[aria-pressed=true]{outline:3px solid #E8A84A;outline-offset:2px}\nbutton:focus-visible{outline:3px solid #2F5D6B;outline-offset:3px}button:disabled{opacity:.55}\n@media(max-width:420px){.cottage-hud{gap:.5rem}.house{padding:.25rem .4rem}.houses{gap:.25rem}}\n@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:0s!important;transition-duration:0s!important}}\n",
+          "props": [],
+          "status": "idea",
+          "author": "agent:openai/gpt-6.1-sol=systems",
+          "x": 900,
+          "y": 450,
+          "createdAt": "2026-10-25T01:15:48.199Z",
+          "updatedAt": "2026-10-25T01:15:48.199Z",
+          "updatedBy": "agent:openai/gpt-6.1-sol=systems"
+        },
+        {
+          "id": "n_639e364c",
+          "title": "Source: controller.test.mjs v3 (unexecuted)",
+          "notes": "Copy beside modules, run node --test controller.test.mjs. Not executed. Deterministic fake clock replaces old FIFO timer harness. Browser-only cancellation/inert checks remain in UI patch card.\n\nimport test from 'node:test';\nimport assert from 'node:assert/strict';\nimport {createController} from './controller.mjs';\nfunction harness(){\n let t=0,id=0,cancelled=0;const jobs=[],requests=[];\n const game=createController({render:()=>{},now:()=>t,later:(fn,ms)=>jobs.push({fn,due:t+ms,id:id++}),\n cancelAI:()=>cancelled++,requestAI:payload=>new Promise(resolve=>requests.push({payload,resolve}))});\n function tick(ms){const target=t+ms;for(;;){jobs.sort((a,b)=>a.due-b.due||a.id-b.id);if(!jobs.length||jobs[0].due>target)break;const j=jobs.shift();t=j.due;j.fn();}t=target;}\n return {game,tick,requests,cancelled:()=>cancelled};\n}\nconst flush=async()=>{await Promise.resolve();await Promise.resolve();};\nasync function reply(h,at){const r=h.requests.at(-1);assert(r);r.resolve({revision:r.payload.revision,action:{type:'Place',at}});await flush();}\nasync function turn(h,x,o){assert(h.game.commit({type:'Place',at:x}));h.tick(300);await reply(h,o);h.tick(300);}\n\ntest('nonwinning power scores once; preview scores nothing',()=>{\n const h=harness(),g=h.game;assert(g.draft('ward'));\n const a={type:'Ward',at:0,shieldCell:8};assert(g.preview(a).position);assert.equal(g.getState().score,0);\n assert(g.commit(a));assert.equal(g.getState().score,25);assert.equal(g.getState().powersSpentThisLevel,1);\n assert.equal(g.commit(a),false);assert.equal(g.getState().score,25);\n});\ntest('win skip and newly entered draft have separate guards',async()=>{\n const h=harness(),g=h.game;g.draft('ward');await turn(h,0,3);await turn(h,1,4);\n assert(g.commit({type:'Place',at:2}));assert.equal(g.getState().phase,'won');assert.equal(g.getState().score,250);\n assert.equal(g.skipWon(),false);h.tick(250);assert(g.skipWon());assert.equal(g.getState().phase,'draft');\n assert.equal(g.draft('slide'),false);h.tick(250);assert(g.draft('slide'));\n h.tick(1000);assert.equal(g.getState().level,2);assert.equal(g.getState().phase,'player');\n});\ntest('reset invalidates transitions and worker replies',async()=>{\n const h=harness(),g=h.game;g.draft('ward');g.commit({type:'Place',at:0});h.tick(300);\n const r=h.requests[0];g.newRun();const before=g.getState();assert.equal(h.cancelled(),1);\n r.resolve({revision:r.payload.revision,action:{type:'Place',at:1}});await flush();h.tick(1000);\n assert.deepEqual(g.getState(),before);\n});\ntest('illegal worker reply takes center before first empty cell',async()=>{\n const h=harness(),g=h.game;g.draft('ward');g.commit({type:'Place',at:0});h.tick(300);\n await reply(h,0);assert.equal(g.getState().position.cells[4],'O');\n});\ntest('draw-exhaustion refunds one board but retains tilt; only once',async()=>{\n const h=harness(),g=h.game;g.draft('ward');\n async function draw(){\n  for(const [x,o] of [[0,4],[8,1],[7,6],[2,5]])await turn(h,x,o);\n  assert(g.commit({type:'Place',at:3}));h.tick(300);\n }\n await draw();assert.equal(g.getState().boardsLeft,2);\n await draw();assert.equal(g.getState().boardsLeft,1);\n await draw();assert.equal(g.getState().phase,'lost');assert.equal(g.getState().boardsLeft,0);\n h.tick(1000);let s=g.getState();assert.equal(s.phase,'player');assert.equal(s.boardsLeft,1);\n assert.equal(s.drawsThisLevel,3);assert.equal(s.secondWindAvailable,false);assert.equal(s.heat,0);\n await draw();assert.equal(g.getState().phase,'lost');h.tick(1000);assert.equal(g.getState().phase,'defeat');\n});\ntest('O-line Second Wind retains the current attempt',async()=>{\n const h=harness(),g=h.game;g.draft('ward');await turn(h,0,3);await turn(h,1,4);\n g.commit({type:'Place',at:8});h.tick(300);await reply(h,5);\n assert.equal(g.getState().phase,'lost');h.tick(999);assert.equal(g.getState().phase,'lost');h.tick(1);\n const s=g.getState();assert.equal(s.phase,'player');assert.equal(s.boardsLeft,3);assert.equal(s.inventory.ward,1);assert.equal(s.secondWindAvailable,false);\n});",
+          "props": [],
+          "status": "idea",
+          "author": "agent:openai/gpt-6.1-sol=systems",
+          "x": 600,
+          "y": 660,
+          "createdAt": "2026-10-25T01:16:14.311Z",
+          "updatedAt": "2026-10-25T01:25:21.572Z",
+          "updatedBy": "agent:openai/gpt-6.1-sol=systems"
+        },
+        {
+          "id": "n_0984e7a2",
+          "title": "Won: 700ms golden-line beat",
+          "notes": "The golden line sews and the HEARTH flares. A tap skips to the draft screen (no auto-pick). After L5, goes to victory.",
+          "props": [],
+          "status": "idea",
+          "author": "claude",
+          "x": 1050,
+          "y": -150,
+          "createdAt": "2026-10-25T01:17:18.888Z",
+          "updatedAt": "2026-10-25T01:17:18.888Z",
+          "updatedBy": "claude"
+        },
+        {
+          "id": "n_4da77614",
+          "title": "Source: ai.worker.mjs (unexecuted)",
+          "notes": "Copy beside rules.mjs. Browser module worker; exports tacticalFallback for controller use. Correctness-first uses public v2 reducer; revalidation is still a known bottleneck. Budget is cooperative, unmeasured; no tests executed. Root fallback is canonicalized to avoid a duplicate branch.\n\nimport {legalActions,applyAction} from './rules.mjs';\nconst lines=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];\nconst wins=(c,p)=>lines.some(l=>l.every(i=>c[i]===p));\nexport function tacticalFallback(s){\n const moves=legalActions(s).filter(a=>a.type==='Place'),p=s.toMove,enemy=p==='O'?'X':'O';\n const makes=(a,mark)=>{const c=[...s.cells];c[a.at]=mark;return wins(c,mark);};\n return moves.find(a=>makes(a,p))||moves.find(a=>makes(a,enemy))||moves.find(a=>a.at===4)||moves[0]||null;\n}\nfunction evaluate(s,ply){\n if(s.result==='O')return 10000-ply;if(s.result==='X')return -10000+ply;if(s.result==='draw')return 0;\n let v=0;\n for(const l of lines){\n  const c=l.map(i=>s.cells[i]);if(c.includes('rock'))continue;\n  const x=c.filter(p=>p==='X').length,o=c.filter(p=>p==='O').length;\n  if(!x)v+=[0,2,12,500][o];if(!o)v-=[0,2,12,500][x];\n }\n v-=3*(s.powersX.shatter+s.powersX.slide+s.powersX.ward);v+=3*s.wardO;\n if(s.shield)v+=s.shield.blockedActor==='X'?2:-2;return v;\n}\nexport function chooseAI(position,{level=5,drawsThisLevel=0,budgetMs=300,maxDepth=6,random=Math.random,now=()=>performance.now()}={}){\n const start=now(),deadline=start+budgetMs,TIMEOUT=Symbol('timeout');\n const root=legalActions(position),plain=root.filter(a=>a.type==='Place'),fallback=tacticalFallback(position);\n if(!root.length)return {action:null,depth:0};\n const immediate=plain.find(a=>applyAction(position,a).position?.result==='O');\n if(level>=4&&immediate)return {action:immediate,depth:0,policy:'win'};\n const p=Math.min(1,[0,.8,.4,.25,.1,0][level]+.1*drawsThisLevel);\n if(random()<p)return {action:plain[Math.floor(random()*plain.length)]||fallback,depth:0,policy:'blunder'};\n const check=()=>{if(now()>=deadline)throw TIMEOUT;};\n const rank=a=>a.type==='Place'?(a.at===4?0:1):2;\n function actions(s,ply){\n  const a=legalActions(s);\n  return (s.toMove==='X'&&ply>4?a.filter(x=>x.type==='Place'):a).sort((a,b)=>rank(a)-rank(b));\n }\n function search(s,depth,alpha,beta,ply){\n  check();if(s.result!=='playing'||depth===0)return evaluate(s,ply);\n  const maximizing=s.toMove==='O';let best=maximizing?-Infinity:Infinity;\n  for(const a of actions(s,ply)){\n   check();const r=applyAction(s,a);if(r.error)continue;\n   const value=search(r.position,depth-1,alpha,beta,ply+1);\n   best=maximizing?Math.max(best,value):Math.min(best,value);\n   if(maximizing)alpha=Math.max(alpha,best);else beta=Math.min(beta,best);\n   if(beta<=alpha)break;\n  }\n  return Number.isFinite(best)?best:evaluate(s,ply);\n }\n let best=root.find(a=>a.type==='Place'&&a.at===fallback?.at)||root[0],completedDepth=0,timedOut=false;\n for(let depth=1;depth<=maxDepth;depth++){\n  let candidate=best,value=-Infinity;\n  const ordered=[best,...root.filter(a=>a!==best)];\n  try{\n   for(const a of ordered){check();const r=applyAction(position,a);if(r.error)continue;\n    const score=search(r.position,depth-1,value,Infinity,1);\n    if(score>value){value=score;candidate=a;}\n   }\n   best=candidate;completedDepth=depth;\n  }catch(e){if(e!==TIMEOUT)throw e;timedOut=true;break;}\n }\n return {action:best,depth:completedDepth,timedOut,elapsedMs:now()-start,policy:'search'};\n}\nif(typeof WorkerGlobalScope!=='undefined'&&globalThis instanceof WorkerGlobalScope){\n globalThis.onmessage=({data})=>{\n  const {revision,position,level,drawsThisLevel}=data;\n  try{globalThis.postMessage({revision,...chooseAI(position,{level,drawsThisLevel})});}\n  catch{globalThis.postMessage({revision,action:tacticalFallback(position),policy:'error-fallback'});}\n };\n}\n",
+          "props": [],
+          "status": "idea",
+          "author": "agent:openai/gpt-6.1-sol=systems",
+          "x": 1200,
+          "y": 450,
+          "createdAt": "2026-10-25T01:18:10.741Z",
+          "updatedAt": "2026-10-25T01:19:09.930Z",
+          "updatedBy": "agent:openai/gpt-6.1-sol=systems"
+        },
+        {
+          "id": "n_ac5bc796",
+          "title": "Source: board.mjs v2 (unexecuted)",
+          "notes": "Copy JS to board.mjs; retain CSS from prior renderer card/version or use the compact CSS below. onCommit, onSkipWon, announce injected. destroy removes document listeners. Last-selected cell cancels (not every earlier cell, so Slide may still place at its vacated origin). Not executed.\n\nimport {legalActions,applyAction} from './rules.mjs';\nconst fields={Shatter:['remove','at'],Slide:['from','to','at'],Ward:['at','shieldCell']};\nconst names={shatter:'Shatter',slide:'Slide',ward:'Ward'};\nconst instructions={remove:'Choose a button or cat to remove',from:'Choose your stitch to move',to:'Choose where it moves',at:'Choose where to stitch X',shieldCell:'Choose a cell to shield'};\nconst symbols={\n X:'<path d=\"M24 24L76 76M76 24L24 76\" stroke=\"#F4E9D8\" stroke-width=\"17\"/><path d=\"M24 24L76 76M76 24L24 76\" stroke=\"#B5485A\" stroke-width=\"11\" stroke-dasharray=\"5 2\"/>',\n O:'<circle cx=\"50\" cy=\"50\" r=\"29\" fill=\"#2F5D6B\" stroke=\"#F4E9D8\" stroke-width=\"5\"/><g fill=\"#F4E9D8\"><circle cx=\"43\" cy=\"43\" r=\"3\"/><circle cx=\"57\" cy=\"43\" r=\"3\"/><circle cx=\"43\" cy=\"57\" r=\"3\"/><circle cx=\"57\" cy=\"57\" r=\"3\"/></g>',\n rock:'<ellipse cx=\"49\" cy=\"60\" rx=\"31\" ry=\"19\" fill=\"#6B4A35\"/><path d=\"M25 49L27 31L41 43M53 42L66 31L68 51\" fill=\"#6B4A35\" stroke=\"#2A3348\" stroke-width=\"3\"/><path d=\"M66 67Q89 68 79 49\" fill=\"none\" stroke=\"#6B4A35\" stroke-width=\"8\"/>',\n shield:'<rect x=\"5\" y=\"5\" width=\"90\" height=\"90\" rx=\"12\" fill=\"none\" stroke=\"#6B4A35\" stroke-width=\"3\" stroke-dasharray=\"7 4\"/><ellipse cx=\"50\" cy=\"69\" rx=\"32\" ry=\"11\" fill=\"#6B4A35\"/><path d=\"M28 62Q28 28 50 28Q72 28 72 62Z\" fill=\"#F4E9D8\" stroke=\"#2A3348\" stroke-width=\"3\"/><path d=\"M72 43Q90 39 85 54L74 57\" fill=\"none\" stroke=\"#2A3348\" stroke-width=\"4\"/>'};\nconst lines=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];\nexport function createBoard(root,{onCommit,onSkipWon=()=>{},announce=()=>{}}){\n let s=null,form=null,step=0,action=null,lastCell=null;\n function reset(){form=null;step=0;action=null;lastCell=null;}\n function candidates(){return legalActions(s.position).filter(a=>a.type===form.type&&Object.entries(form).every(([k,v])=>a[k]===v));}\n function progress(){\n  const options=candidates(),order=fields[form.type];\n  while(step<order.length&&options.every(a=>a[order[step]]===null)){form[order[step]]=null;step++;}\n  if(step===order.length)action=options[0];\n }\n function cancel(){reset();if(s)draw();}\n function selectPower(type){\n  if(s?.phase!=='player'||!names[type])return false;\n  if(!legalActions(s.position).some(a=>a.type===names[type])){announce('No legal use for that tool yet.');return false;}\n  reset();form={type:names[type]};draw();return true;\n }\n function render(state){if(s?.revision!==state.revision||state.phase!=='player')reset();s=state;draw();}\n function draw(){\n  if(!s)return;if(!s.position){root.innerHTML='<p>Choose your first sewing tool.</p>';return;}\n  const preview=action?applyAction(s.position,action):null,shown=preview?.position||s.position,shield=shown.shield;\n  const field=form?fields[form.type][step]:null;\n  const targets=form&&!action?new Set(candidates().map(a=>a[field])):null;\n  const normalTargets=new Set(legalActions(s.position).filter(a=>a.type==='Place').map(a=>a.at));\n  const winning=s.phase==='won'?lines.find(l=>l.every(i=>s.position.cells[i]==='X')):null;\n  root.innerHTML=`<section class=\"quilt\" style=\"--decor-opacity:${s.heat>7?.35:1}\" aria-label=\"Stitched tic-tac-toe board\">\n   <p role=\"status\">${action?'Preview: confirm or cancel':form?instructions[field]:s.phase==='won'?'A golden seam!':'Berry stitches: you. Teal buttons: Owl.'}</p>\n   <div class=\"quilt-grid\">${shown.cells.map((piece,i)=>{\n    const blocked=s.position.shield?.blockedActor==='X'&&s.position.shield.cell===i;\n    const enabled=s.phase==='player'&&((form&&i===lastCell)||(!action&&(targets?targets.has(i):normalTargets.has(i))));\n    const label=piece==='X'?'your stitch':piece==='O'?'Owl button':piece==='rock'?'sleeping cat':'empty';\n    return `<button class=\"quilt-cell ${winning?.includes(i)?'golden-seam':''}\" data-cell=\"${i}\" ${enabled?'':'disabled'} aria-label=\"Row ${Math.floor(i/3)+1}, column ${i%3+1}: ${label}${blocked?', blocked for your move':''}${form&&i===lastCell?', tap again to cancel':''}\"><svg viewBox=\"0 0 100 100\" aria-hidden=\"true\">${symbols[piece]||''}${shield?.cell===i?symbols.shield:''}</svg></button>`;\n   }).join('')}</div>\n   ${form?`<button data-cancel>Cancel tool</button>${action?'<button data-confirm>Confirm stitch</button>':''}`:''}\n   ${s.phase==='won'?'<button data-skip>Continue</button>':''}</section>`;\n  root.querySelectorAll('[data-cell]').forEach(b=>b.onclick=()=>{\n   const at=Number(b.dataset.cell);\n   if(form&&at===lastCell){cancel();return;}\n   if(!form){onCommit({type:'Place',at});return;}\n   form[field]=at;lastCell=at;step++;progress();draw();\n  });\n  const c=root.querySelector('[data-cancel]');if(c)c.onclick=cancel;\n  const confirm=root.querySelector('[data-confirm]');if(confirm)confirm.onclick=()=>{const a=action;reset();onCommit(a);};\n  const skip=root.querySelector('[data-skip]');if(skip)skip.onclick=e=>{e.stopPropagation();onSkipWon();};\n }\n function outside(e){if(form&&!root.contains(e.target))cancel();}\n function escape(e){if(form&&e.key==='Escape'){e.preventDefault();cancel();}}\n document.addEventListener('pointerdown',outside,true);document.addEventListener('keydown',escape);\n return {render,selectPower,cancel,destroy(){document.removeEventListener('pointerdown',outside,true);document.removeEventListener('keydown',escape);root.replaceChildren();}};\n}\n\n/* CSS: */\n.quilt{padding:1rem;background:#F4E9D8;color:#2A3348;border:10px solid #6B4A35;border-radius:1.5rem;max-width:32rem;margin:auto}\n.quilt-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:2px dashed #6B4A35}\n.quilt-cell{aspect-ratio:1;min-width:0;min-height:48px;padding:.2rem;background:#F4E9D8;border:1px dashed #6B4A35;color:#2A3348}\n.quilt-cell:disabled{opacity:1}.quilt-cell svg{display:block;width:100%;height:100%}\n.quilt-cell:not(:disabled):hover{background:#FFF8ED}.quilt-cell:focus-visible{outline:3px solid #2F5D6B;outline-offset:-5px}\n.golden-seam{box-shadow:inset 0 0 0 5px #E8A84A}\n.quilt [data-confirm],.quilt [data-cancel],.quilt [data-skip]{min-height:48px;margin:.4rem;padding:.6rem;font:inherit}\n",
+          "props": [],
+          "status": "idea",
+          "author": "agent:openai/gpt-6.1-sol=systems",
+          "x": 1500,
+          "y": 450,
+          "createdAt": "2026-10-25T01:18:36.956Z",
+          "updatedAt": "2026-10-25T01:24:37.921Z",
+          "updatedBy": "agent:openai/gpt-6.1-sol=systems"
+        },
+        {
+          "id": "n_777c3387",
+          "title": "Source: app.mjs integration (unexecuted)",
+          "notes": "Prototype assembly, not a finished illustrated scene. Copy JS to app.mjs; load via <script type=\"module\"> over HTTP with all source modules beside it. Extract CSS from board/HUD cards into one stylesheet. Calls mountGame(document.querySelector('#app')). No execution or visual validation here.\n\nimport {createController} from './controller.mjs';\nimport {createHUD} from './hud.mjs';\nimport {createBoard} from './board.mjs';\nexport function mountGame(root){\n root.innerHTML='<h1>Hearth &amp; Thread</h1><div data-hud></div><div data-board></div><p data-score></p><p data-live role=\"status\" aria-live=\"polite\"></p>';\n const hudRoot=root.querySelector('[data-hud]'),boardRoot=root.querySelector('[data-board]');\n const live=root.querySelector('[data-live]'),score=root.querySelector('[data-score]');\n const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;\n let game,pending=null,lastRefill='';\n let best=0;try{best=Number(localStorage.getItem('hearth-best'))||0;}catch{}\n function cancelAI(){\n  if(!pending)return;const j=pending;pending=null;\n  clearTimeout(j.timer);j.worker.terminate();j.reject(new Error('cancelled'));\n }\n function requestAI(payload){\n  cancelAI();\n  return new Promise((resolve,reject)=>{\n   const worker=new Worker(new URL('./ai.worker.mjs',import.meta.url),{type:'module'});\n   const job={worker,reject,timer:null};pending=job;\n   function finish(error,reply){\n    if(pending!==job)return;pending=null;clearTimeout(job.timer);worker.terminate();\n    if(error)reject(error);else resolve(reply);\n   }\n   worker.onmessage=e=>finish(null,e.data);worker.onerror=()=>finish(new Error('worker failed'));\n   job.timer=setTimeout(()=>finish(new Error('worker watchdog')),600);\n   worker.postMessage(payload);\n  });\n }\n const board=createBoard(boardRoot,{onCommit:a=>game.commit(a),onSkipWon:()=>game.skipWon(),announce:t=>live.textContent=t});\n const hud=createHUD(hudRoot,{onDraft:(t,r)=>game.draft(t,r),onAgain:()=>game.newRun(),onPower:t=>board.selectPower(t)});\n function render(s){\n  hud(s);board.render(s);\n  if(s.phase==='won')hudRoot.querySelector('.turn-status').textContent='A golden seam! Continue when ready.';\n  score.textContent=`Score: ${s.score} · Best: ${best}`;\n  const refill=s.events.find(e=>e.type==='heartsRefill');\n  const eventKey=`${s.revision}:${s.level}`;\n  if(refill&&lastRefill!==eventKey){\n   lastRefill=eventKey;\n   const hearts=hudRoot.querySelector('.attempts>span');hearts.replaceChildren();\n   for(let i=0;i<3;i++){\n    const heart=document.createElement('span');heart.textContent='♥';heart.style.display='inline-block';hearts.append(heart);\n    if(i>=refill.from&&!reduced)heart.animate([{transform:'scale(.5)',opacity:.25},{transform:'scale(1.2)',opacity:1},{transform:'scale(1)',opacity:1}],{duration:300,delay:(i-refill.from)*120,fill:'backwards'});\n   }\n   live.textContent='New room: three board attempts ready.';\n  }\n }\n game=createController({render,requestAI,cancelAI,reducedMotion:reduced,onOutcome:s=>{\n  best=Math.max(best,s.score);try{localStorage.setItem('hearth-best',String(best));}catch{}\n  score.textContent=`Score: ${s.score} · Best: ${best}`;\n }});\n return {game,destroy(){cancelAI();root.replaceChildren();}};\n}\n\nRemaining polish: Owl/cottage scene, true stitched-line/unravel animation, sound, decor vignette. Current renderer supplies shapes and state hooks only. HUD's internal phase label table should eventually add won directly; wrapper supplies its text meanwhile. Watchdog is 600ms recovery, not the worker's ~300ms soft search budget.",
+          "props": [],
+          "status": "idea",
+          "author": "agent:openai/gpt-6.1-sol=systems",
+          "x": 1800,
+          "y": 450,
+          "createdAt": "2026-10-25T01:19:33.277Z",
+          "updatedAt": "2026-10-25T01:19:33.277Z",
+          "updatedBy": "agent:openai/gpt-6.1-sol=systems"
+        },
+        {
+          "id": "n_a1545612",
+          "title": "QA paper run: L5 verdict = measure it",
+          "notes": "Retracting \"L5 is unwinnable\". Foreman's line checks out by hand and so does mine — but not for the reason given. The win isn't the first fork; it's the recursion. After Shatter X holds three marks, and whichever single mark O blocks, adding one more X creates a *second* one-cell threat, so O faces two threats with one placement and one shield. X wins by arithmetic, not by cleverness.\n\nExample (mine, on the fixture card): X 0,4 / O 5,8. Shatter 8, place 1 → X 0,1,4 forks 2 and 7. O blocks 2 and shields 7; X plays 3, threatening 6; O blocks 6; shield on 7 expires; X plays 7 and wins column 1-4-7.\n\nWhat stays open, and only the worker answers it: does a perfect O avoid ever letting X reach three marks on a fork shape, and does the shipped 6-ply cap see the recursion at all. If the win only appears inside the horizon, L5's \"0% minimax\" is an artifact and the level is fake. Instrument: seed 200 L5 boards with 3 powers, target 55-70% clear. Above 85% the finale is a formality; below 40% it is a wall.",
+          "props": [
+            {
+              "key": "Foreman",
+              "value": "L5 is unwinnable only with empty pockets. By hand: X4 O0 X2 O6; X Shatters 6 and places at 1, forking 6 and 7. If O Wards 6 and plays 7, X plays 3 and forks 5 and 6, so X wins. That's one line, not a proof; verify in the worker. Fix: can't skip the L4 to L5 draft at 0 powers. Ward-costs-turn rejected."
+            }
+          ],
+          "status": "idea",
+          "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+          "x": 900,
+          "y": 660,
+          "createdAt": "2026-10-25T01:19:54.269Z",
+          "updatedAt": "2026-10-25T01:22:51.731Z",
+          "updatedBy": "agent:deepseek/deepseek-v4.1-flash-1017=qa"
+        },
+        {
+          "id": "n_5030ed6e",
+          "title": "Source: audio.mjs (unexecuted)",
+          "notes": "WebAudio synthesis; no assets. createAudio() returns unlock, mute, heat, cue, destroy. unlock must run from a click/key gesture; returns false if unavailable. Quiet by default; not executed or loudness-tested. No gameplay timing depends on sound.\n\nexport function createAudio(){\n let ctx=null,master=null,fire=null,timer=null,noise=null,fireSource=null,muted=false,H=0,beat=0,dead=false;\n const voices=new Set();\n function tone(hz,t,d=.15,g=.1,endHz=null){\n  if(!ctx||muted||document.hidden||dead)return;\n  const o=ctx.createOscillator(),v=ctx.createGain();o.type='sine';o.frequency.setValueAtTime(hz,t);\n  if(endHz)o.frequency.exponentialRampToValueAtTime(endHz,t+d);\n  v.gain.setValueAtTime(0,t);v.gain.linearRampToValueAtTime(g,t+.008);v.gain.exponentialRampToValueAtTime(.0001,t+d);\n  o.connect(v).connect(master);voices.add(o);o.onended=()=>{voices.delete(o);o.disconnect();v.disconnect();};o.start(t);o.stop(t+d+.02);\n }\n function rustle(t,d=.07,g=.15){\n  if(!ctx||muted||document.hidden||dead)return;\n  const src=ctx.createBufferSource(),v=ctx.createGain(),f=ctx.createBiquadFilter();src.buffer=noise;\n  f.type='bandpass';f.frequency.value=1400;f.Q.value=.7;\n  v.gain.setValueAtTime(g,t);v.gain.exponentialRampToValueAtTime(.0001,t+d);\n  src.connect(f).connect(v).connect(master);voices.add(src);\n  src.onended=()=>{voices.delete(src);src.disconnect();f.disconnect();v.disconnect();};src.start(t);src.stop(t+d+.02);\n }\n function sync(){\n  if(!ctx)return;\n  const t=ctx.currentTime;\n  master.gain.setTargetAtTime(muted||document.hidden?0:.18,t,.03);\n  fire.gain.setTargetAtTime(.008+.022*H/10,t,.3);\n }\n function tick(){\n  if(!ctx||ctx.state!=='running'||muted||document.hidden)return;\n  const t=ctx.currentTime+.025,phrase=[523.25,659.25,783.99,659.25,587.33,659.25,523.25,0];\n  const n=phrase[beat%8];if(n)tone(n,t,.35,.055);\n  if(H>=4&&beat%2===0)tone(261.63,t,.55,.025);\n  if(H>=8&&beat%4===0){tone(130.81,t,.8,.025);tone(392,t+.06,.65,.018);}\n  if(Math.random()<.08+.2*H/10)rustle(t,.025,.015);\n  beat++;\n }\n async function unlock(){\n  if(dead)return false;\n  try{\n   if(!ctx){\n    const Audio=globalThis.AudioContext||globalThis.webkitAudioContext;if(!Audio)return false;\n    ctx=new Audio();master=ctx.createGain();master.gain.value=0;master.connect(ctx.destination);\n    noise=ctx.createBuffer(1,ctx.sampleRate*2,ctx.sampleRate);\n    const data=noise.getChannelData(0);for(let i=0;i<data.length;i++)data[i]=Math.random()*2-1;\n    fireSource=ctx.createBufferSource();fireSource.buffer=noise;fireSource.loop=true;\n    const f=ctx.createBiquadFilter();f.type='lowpass';f.frequency.value=650;\n    fire=ctx.createGain();fireSource.connect(f).connect(fire).connect(master);fireSource.start();\n    timer=setInterval(tick,400);\n   }\n   await ctx.resume();sync();return ctx.state==='running';\n  }catch{return false;}\n }\n function heat(value){H=Math.max(0,Math.min(10,value));sync();}\n function mute(value){muted=Boolean(value);sync();}\n function cue(name){\n  if(!ctx||ctx.state!=='running'||muted||document.hidden)return;\n  const t=ctx.currentTime+.01;\n  if(name==='stitch'){rustle(t,.025,.06);tone(950,t,.04,.025);}\n  if(name==='Shatter'){rustle(t,.06,.16);tone(360,t,.09,.04,180);}\n  if(name==='Slide')tone(330,t,.22,.05,660);\n  if(name==='Ward'){tone(1046.5,t,.45,.055);tone(1568,t+.025,.3,.018);}\n  if(name==='win'||name==='repair')[523.25,659.25,783.99].forEach((n,i)=>tone(n,t+i*.08,.55,.06));\n  if(name==='lost'){tone(392,t,.7,.055,196);rustle(t+.1,.3,.04);}\n }\n function visibility(){sync();if(ctx){if(document.hidden)ctx.suspend().catch(()=>{});else ctx.resume().catch(()=>{});}}\n document.addEventListener('visibilitychange',visibility);\n function destroy(){\n  dead=true;clearInterval(timer);document.removeEventListener('visibilitychange',visibility);\n  for(const v of voices){try{v.stop();}catch{}}voices.clear();\n  if(fireSource){try{fireSource.stop();}catch{}}\n  if(ctx)ctx.close().catch(()=>{});\n }\n return {unlock,mute,heat,cue,destroy};\n}\n",
+          "props": [],
+          "status": "idea",
+          "author": "agent:openai/gpt-6.1-sol=systems",
+          "x": 2100,
+          "y": 450,
+          "createdAt": "2026-10-25T01:21:31.179Z",
+          "updatedAt": "2026-10-25T01:21:31.179Z",
+          "updatedBy": "agent:openai/gpt-6.1-sol=systems"
+        },
+        {
+          "id": "n_e7ce232c",
+          "title": "Audio wiring patch: app.mjs (unexecuted)",
+          "notes": "Apply to app.mjs; this is a source patch, not an applied filesystem edit. Keep sound button outside HUD/board roots so their re-renders do not replace it.\n\n1. Add import:\nimport {createAudio} from './audio.mjs';\n\n2. Inside mountGame, after root.innerHTML and before createController:\nconst audio=createAudio();\nlet soundOn=false,lastAudioRevision=-1,lastAudioBeat='',previousAudioState=null;\nconst soundButton=document.createElement('button');\nsoundButton.type='button';soundButton.textContent='Enable sound';soundButton.setAttribute('aria-pressed','false');\nsoundButton.style.minHeight='48px';root.append(soundButton);\nsoundButton.onclick=async()=>{\n if(soundOn){soundOn=false;audio.mute(true);}\n else {soundOn=await audio.unlock();audio.mute(!soundOn);}\n soundButton.textContent=soundOn?'Mute sound':'Enable sound';\n soundButton.setAttribute('aria-pressed',String(soundOn));\n};\nfunction renderAudio(s){\n audio.heat(s.heat);\n if(s.revision!==lastAudioRevision){\n  lastAudioRevision=s.revision;\n  for(const e of s.events){if(e.type==='power')audio.cue(e.power);if(e.type==='placement')audio.cue('stitch');}\n }\n const beat=`${s.revision}:${s.phase}`;\n if(beat!==lastAudioBeat){\n  lastAudioBeat=beat;\n  if(s.phase==='won')audio.cue('win');if(s.phase==='lost')audio.cue('lost');\n  if(previousAudioState?.phase==='lost'&&previousAudioState.secondWindAvailable&&!s.secondWindAvailable)audio.cue('repair');\n }\n previousAudioState={phase:s.phase,secondWindAvailable:s.secondWindAvailable};\n}\n\n3. At the start of render(s), call renderAudio(s). Do not play sounds from preview or search.\n\n4. In destroy(), call audio.destroy() before replacing root children.\n\nNotes: explicit opt-in each mount; no sound before the enable gesture. Mute persists through retries/levels in this mount. Reduced motion does not imply muted audio. Cue keys suppress duplicate playback from draft, animation and HUD renders. All Ward/legal-target information remains visible with audio disabled.",
+          "props": [],
+          "status": "idea",
+          "author": "agent:openai/gpt-6.1-sol=systems",
+          "x": 2400,
+          "y": 450,
+          "createdAt": "2026-10-25T01:21:52.339Z",
+          "updatedAt": "2026-10-25T01:21:52.339Z",
+          "updatedBy": "agent:openai/gpt-6.1-sol=systems"
+        },
+        {
+          "id": "n_2a5f7e4c",
+          "title": "Fixtures: L5 Shatter fork, exhaustive replies",
+          "notes": "L5-FORK-A (legal: X=2, O=2, X to move)\ncells: ['X',null,null, null,'X','O', null,null,'O']\npowersX {shatter:1,slide:0,ward:0}, wardO:1, shield null\nWinning action under test: Shatter{remove:8, at:1}. X becomes 0,1,4 and forks cells 2 and 7.\nAssert with legalActions: every legal O reply (Place and Ward) leads to an X win inside 6 plies. Hand trace says O's block-plus-Ward survives fork one, so also assert X's remaining powers can re-fork.\nControl: same cells with powersX all 0 must score draw or worse for X. If the control wins, the fixture is broken, not the AI.\n\nSecond fixture L5-FORK-B: cells ['X',null,null, null,'X',null, null,'O','O'], powersX {slide:1,shatter:1}. Same assert shape — Slide plus Shatter must beat a single Ward.\n\nRun against ai.worker.mjs, not by hand.",
+          "props": [
+            {
+              "key": "Foreman",
+              "value": "FORK-A is a TRIPLE threat: the vacated 8 reopens 0-4-8, so X threatens 2, 7 and 8. O can cover at most two (one placement plus a Ward), so assert an X win within 3 plies; no re-fork needed. Control: plain X2 forks 1 and 6, but O blocks with 1 plus a Ward on 6, so it draws. Good control."
+            }
+          ],
+          "status": "idea",
+          "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+          "x": 900,
+          "y": 780,
+          "createdAt": "2026-10-25T01:22:36.886Z",
+          "updatedAt": "2026-10-25T01:23:23.936Z",
+          "updatedBy": "claude"
+        },
+        {
+          "id": "n_82ce23e0",
+          "title": "Controller v3: required UI patch (unexecuted)",
+          "notes": "Apply alongside controller v3 + board v2 before browser testing. Not executed; these edits are not yet merged into the older HUD/app cards.\n\nhud.mjs:\n- Replace const left=3-s.drawsThisLevel; with const left=s.boardsLeft;\n- Add won:'A golden seam!' to phaseText.\n- Hide Skip when s.starterDraft || (s.level===5 && total===0). Label that required draft: 'Choose a tool for the final room.'\n\napp.mjs:\n- At the START of render(s), set root.inert=performance.now()<s.inputLockedUntil; . Controller republishes after each 250ms guard. Inert covers local draft selection, not just final confirmation.\n- In destroy(), call board.destroy() as well as cancelAI()/audio.destroy().\n- Keep renderAudio(s) on the original state: drawsThisLevel is cumulative tilt; do not replace it with spent attempts.\n\nBrowser acceptance: win → tap Continue before 250ms does nothing; after 250ms Continue opens draft; second tap during its next 250ms cannot select OR confirm. Esc/outside/last-cell cancel partial and complete power previews without changing state. Slide may still place at its vacated origin. Verify keyboard and touch, not only mouse.\n\nFrozen scope: no further mechanics before source extraction and test execution.",
+          "props": [],
+          "status": "idea",
+          "author": "agent:openai/gpt-6.1-sol=systems",
+          "x": 2700,
+          "y": 450,
+          "createdAt": "2026-10-25T01:25:10.280Z",
+          "updatedAt": "2026-10-25T01:25:10.280Z",
+          "updatedBy": "agent:openai/gpt-6.1-sol=systems"
+        },
+        {
+          "id": "n_d527005a",
+          "title": "Source: controller-v4.test.mjs (unexecuted)",
+          "notes": "Additional tests; retain controller.test.mjs v3. Copy beside controller.mjs and run node --test. Not executed.\n\nimport test from 'node:test';\nimport assert from 'node:assert/strict';\nimport {createController} from './controller.mjs';\nfunction harness(throwOnCancel=false){\n let t=0,id=0,cancels=0;const jobs=[],requests=[];\n const game=createController({render:()=>{},now:()=>t,later:(fn,ms)=>jobs.push({fn,due:t+ms,id:id++}),\n  cancelAI:()=>{cancels++;if(throwOnCancel)throw Error('cleanup failed');},\n  requestAI:payload=>new Promise(resolve=>requests.push({payload,resolve}))});\n function tick(ms){const target=t+ms;for(;;){jobs.sort((a,b)=>a.due-b.due||a.id-b.id);if(!jobs.length||jobs[0].due>target)break;const j=jobs.shift();t=j.due;j.fn();}t=target;}\n return {game,tick,requests,cancels:()=>cancels};\n}\nconst flush=async()=>{await Promise.resolve();await Promise.resolve();};\nasync function reply(h,at,index=h.requests.length-1){const r=h.requests[index];r.resolve({revision:r.payload.revision,action:{type:'Place',at}});await flush();}\n\ntest('silent worker: fallback at 1200ms, late reply cannot touch a new request',async()=>{\n const h=harness(),g=h.game;g.draft('ward');g.commit({type:'Place',at:0});h.tick(300);\n const revision=g.getState().revision;h.tick(1199);assert.equal(g.getState().phase,'ai');\n h.tick(1);assert.equal(h.cancels(),1);assert.equal(g.getState().position.cells[4],'O');assert(g.getState().revision>revision);\n h.tick(300);assert(g.commit({type:'Place',at:1}));h.tick(300);assert.equal(h.requests.length,2);\n const before=g.getState();await reply(h,8,0);assert.deepEqual(g.getState(),before);\n await reply(h,2,1);assert.equal(g.getState().position.cells[2],'O');\n});\ntest('cleanup throwing cannot prevent timeout fallback',()=>{\n const h=harness(true),g=h.game;g.draft('ward');g.commit({type:'Place',at:0});h.tick(1500);\n assert.equal(h.cancels(),1);assert.equal(g.getState().position.cells[4],'O');assert.equal(g.getState().phase,'transition');\n});\ntest('successful reply leaves watchdog inert',async()=>{\n const h=harness(),g=h.game;g.draft('ward');g.commit({type:'Place',at:0});h.tick(300);await reply(h,4);\n h.tick(300);const before=g.getState();h.tick(1000);assert.deepEqual(g.getState(),before);assert.equal(h.cancels(),0);\n});\ntest('Heat counts committed placements, power spend, line bonus and board reset',async()=>{\n const h=harness(),g=h.game;g.draft('ward');const a={type:'Ward',at:0,shieldCell:8};\n g.preview(a);assert.equal(g.getState().heat,0);assert(g.commit(a));assert.equal(g.getState().heat,3);\n h.tick(300);await reply(h,3);h.tick(300);assert(g.commit({type:'Place',at:1}));\n h.tick(300);await reply(h,4);h.tick(300);assert.equal(g.getState().heat,6);\n assert(g.commit({type:'Place',at:2}));assert.equal(g.getState().heat,10);assert.equal(g.getState().phase,'won');\n h.tick(700);h.tick(250);assert(g.draft('slide'));assert.equal(g.getState().heat,0);\n});",
+          "props": [
+            {
+              "key": "QA",
+              "value": "Fail on first run: 'cleanup throwing' asserts phase 'transition' after tick(1500). That tick also fires the 300ms settle the watchdog schedules at t=1200 (due 1500), so the phase is already 'player'. Use tick(1301) or assert 'player'."
+            }
+          ],
+          "status": "idea",
+          "author": "agent:openai/gpt-6.1-sol=systems",
+          "x": 900,
+          "y": 868,
+          "createdAt": "2026-10-25T01:27:00.260Z",
+          "updatedAt": "2026-10-25T01:27:30.469Z",
+          "updatedBy": "agent:deepseek/deepseek-v4.1-flash-1017=qa"
+        }
+      ],
+      "edges": [
+        {
+          "id": "e_7d76f927",
+          "from": "n_02c642f5",
+          "to": "n_39dd2971",
+          "label": "",
+          "author": "claude"
+        },
+        {
+          "id": "e_01a1168a",
+          "from": "n_39dd2971",
+          "to": "n_f7ccba28",
+          "label": "",
+          "author": "claude"
+        },
+        {
+          "id": "e_0f1a33d9",
+          "from": "n_f7ccba28",
+          "to": "n_5c5e7f6d",
+          "label": "",
+          "author": "claude"
+        },
+        {
+          "id": "e_2cc42017",
+          "from": "n_5c5e7f6d",
+          "to": "n_39dd2971",
+          "label": "continue",
+          "author": "claude"
+        },
+        {
+          "id": "e_b26a1d43",
+          "from": "n_e2249be5",
+          "to": "n_02c642f5",
+          "label": "next level",
+          "author": "claude"
+        },
+        {
+          "id": "e_fdf615d7",
+          "from": "n_5c5e7f6d",
+          "to": "n_f2291fde",
+          "label": "draw",
+          "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa"
+        },
+        {
+          "id": "e_e045706c",
+          "from": "n_f2291fde",
+          "to": "n_02c642f5",
+          "label": "burn a board",
+          "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa"
+        },
+        {
+          "id": "e_bea7a995",
+          "from": "n_cfdca189",
+          "to": "n_796e565e",
+          "label": "reviewed",
+          "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa"
+        },
+        {
+          "id": "e_78b5961b",
+          "from": "n_d9c6052f",
+          "to": "n_796e565e",
+          "label": "gaps",
+          "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa"
+        },
+        {
+          "id": "e_4fe80825",
+          "from": "n_5c5e7f6d",
+          "to": "n_4747981a",
+          "label": "O line",
+          "author": "claude"
+        },
+        {
+          "id": "e_a0397422",
+          "from": "n_4747981a",
+          "to": "n_02c642f5",
+          "label": "Second Wind",
+          "author": "claude"
+        },
+        {
+          "id": "e_75432add",
+          "from": "n_4747981a",
+          "to": "n_f5dd32c6",
+          "label": "no Second Wind",
+          "author": "claude"
+        },
+        {
+          "id": "e_b6ffeefd",
+          "from": "n_39dd2971",
+          "to": "n_0984e7a2",
+          "label": "X line",
+          "author": "claude"
+        },
+        {
+          "id": "e_fa6ce55d",
+          "from": "n_0984e7a2",
+          "to": "n_e2249be5",
+          "label": "L1-4",
+          "author": "claude"
+        },
+        {
+          "id": "e_85333103",
+          "from": "n_0984e7a2",
+          "to": "n_d0473161",
+          "label": "L5",
+          "author": "claude"
+        },
+        {
+          "id": "e_91bc3ae5",
+          "from": "n_f2291fde",
+          "to": "n_4747981a",
+          "label": "out of boards",
+          "author": "claude"
+        },
+        {
+          "id": "e_08245ffc",
+          "from": "n_a1545612",
+          "to": "n_2a5f7e4c",
+          "label": "fixtures",
+          "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa"
+        }
+      ]
+    },
+    "brainstorm": {
+      "pages": [
+        {
+          "id": "p_main",
+          "name": "Brainstorm",
+          "objects": [
+            {
+              "id": "o_3a24519f",
+              "kind": "group",
+              "x": -268,
+              "y": -74,
+              "w": 565,
+              "h": 0,
+              "author": "claude",
+              "claudeAdded": false,
+              "createdAt": "2026-10-25T00:55:19.077Z",
+              "updatedAt": "2026-10-25T00:58:03.375Z",
+              "updatedBy": "claude",
+              "title": "Open for Sol / DeepSeek",
+              "color": "amber",
+              "entries": [
+                {
+                  "id": "en_942d01a9",
+                  "label": "Sol: 3 placement powers; cosmetic Heat",
+                  "text": "QA accepts: 3 powers, one per turn, consumed, hold 3, starter draft. Heat cosmetic — agreed, one currency only. Keep the preview-before-confirm; it is the whole readability story.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "claude",
+                  "claudeAdded": false
+                },
+                {
+                  "id": "en_7cedf002",
+                  "label": "Sol: level contracts; QA wants L3/L4 swapped",
+                  "text": "Settled: L3 = seeded corners, L4 = O starts (no seed). In Brief.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "claude",
+                  "claudeAdded": false
+                },
+                {
+                  "id": "en_3b53755e",
+                  "label": "QA: AI difficulty curve (random → minimax with mistakes)",
+                  "text": "See Brief #3.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "claude",
+                  "claudeAdded": false
+                },
+                {
+                  "id": "en_567af874",
+                  "label": "QA: stress Smite+Freeze+Echo combos for broken lines",
+                  "text": "Verdict: combo stacking is safe (1 power/turn, consumed). Two real breaks: (a) board-full stalemate if the last cell can be blocked by Ward — the draw rule above closes it; (b) Shatter used to break a two-threat is a get-out-of-jail card, so cap it: Shatter cannot convert an O, only remove it.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "claude",
+                  "claudeAdded": false
+                },
+                {
+                  "id": "en_90b757fe",
+                  "label": "QA: a draw must crack the AI",
+                  "text": "On L4 a 10%-blunder minimax draws most boards, so I burn 3 boards and lose without ever being beaten — worst feeling in the game. Fix with no new mechanic: each draw gives +10% AI blunder for the rest of the level (visible: it hesitates, eyes dim). Draws become progress.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                },
+                {
+                  "id": "en_163c9d19",
+                  "label": "QA: one second wind per run",
+                  "text": "Lose a board = run over is brutal at level 4 of 5. First loss replays that level's fresh board: no draft, Heat reset. One save per run — tension, no new mechanic.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                }
+              ]
+            },
+            {
+              "id": "o_e278b501",
+              "kind": "group",
+              "x": 315,
+              "y": -71,
+              "w": 320,
+              "h": 0,
+              "author": "agent:openai/gpt-6.1-sol=systems",
+              "claudeAdded": false,
+              "createdAt": "2026-10-25T00:56:14.370Z",
+              "updatedAt": "2026-10-25T00:58:03.945Z",
+              "updatedBy": "claude",
+              "title": "Three powers: bend a placement",
+              "color": "violet",
+              "entries": [
+                {
+                  "id": "en_e269d647",
+                  "label": "Shatter",
+                  "text": "Remove one O (or L2 rock), then place X in a different empty cell. Cannot convert the removed target directly into X.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "agent:openai/gpt-6.1-sol=systems",
+                  "claudeAdded": false
+                },
+                {
+                  "id": "en_4e424763",
+                  "label": "Slide",
+                  "text": "Move one X, then place X; lines resolve after. Target is the L3 seeded X.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "agent:openai/gpt-6.1-sol=systems",
+                  "claudeAdded": false
+                },
+                {
+                  "id": "en_53680a04",
+                  "label": "Ward",
+                  "text": "Place X; shield one remaining empty cell against the next AI move only. Must leave at least one legal AI reply unless your placement wins.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "agent:openai/gpt-6.1-sol=systems",
+                  "claudeAdded": false
+                }
+              ]
+            },
+            {
+              "id": "o_d661c92e",
+              "kind": "group",
+              "x": 655,
+              "y": -69,
+              "w": 320,
+              "h": 0,
+              "author": "agent:openai/gpt-6.1-sol=systems",
+              "claudeAdded": false,
+              "createdAt": "2026-10-25T00:58:40.805Z",
+              "updatedAt": "2026-10-25T00:58:40.805Z",
+              "updatedBy": "agent:openai/gpt-6.1-sol=systems",
+              "title": "Build: state model",
+              "color": "sky",
+              "entries": [
+                {
+                  "id": "en_a2035520",
+                  "label": "Position (searchable)",
+                  "text": "cells[9]: null|X|O|rock; toMove: X|O; powersX: {shatter,slide,ward} counts; wardO: 0|1; shield: null|{cell,blockedActor}; result: playing|X|O|draw. Only one active shield at a turn boundary.",
+                  "check": "none",
+                  "ruledOut": false,
+                  "author": "agent:openai/gpt-6.1-sol=systems",
+                  "claudeAdded": false
+                },
+                {
+                  "id": "en_9c19b26f",
+                  "label": "Run (outside search)",
+                  "text": "level:1..5; drawsThisLevel; secondWindAvailable; inventory persists via powersX. phase: draft|player|ai|transition|victory|defeat. Heat, animation queue and seeded RNG are separate presentation/control state.",
+                  "check": "none",
+                  "ruledOut": false,
+                  "author": "agent:openai/gpt-6.1-sol=systems",
+                  "claudeAdded": false
+                },
+                {
+                  "id": "en_6b81e45b",
+                  "label": "Action union",
+                  "text": "Place(at); Shatter(remove,at); Slide(from,to,at); Ward(at,shieldCell). AI uses Place or Ward only. Preview stores an uncommitted Action, never mutates Position.",
+                  "check": "none",
+                  "ruledOut": false,
+                  "author": "agent:openai/gpt-6.1-sol=systems",
+                  "claudeAdded": false
+                }
+              ]
+            },
+            {
+              "id": "o_e6b215ba",
+              "kind": "group",
+              "x": 994,
+              "y": -69,
+              "w": 320,
+              "h": 0,
+              "author": "agent:openai/gpt-6.1-sol=systems",
+              "claudeAdded": false,
+              "createdAt": "2026-10-25T00:58:40.806Z",
+              "updatedAt": "2026-10-25T00:58:40.806Z",
+              "updatedBy": "agent:openai/gpt-6.1-sol=systems",
+              "title": "Build: one atomic reducer",
+              "color": "sky",
+              "entries": [
+                {
+                  "id": "en_d314348e",
+                  "label": "Shared API",
+                  "text": "legalActions(position), applyAction(position,action) → {position,events}. Pure functions. UI preview, committed play and AI call exactly these; animation never controls rules timing.",
+                  "check": "none",
+                  "ruledOut": false,
+                  "author": "agent:openai/gpt-6.1-sol=systems",
+                  "claudeAdded": false
+                },
+                {
+                  "id": "en_401a2bee",
+                  "label": "Validate complete action",
+                  "text": "Shatter: remove enemy/rock, place elsewhere. Slide: move own mark to an empty cell, then place on a different empty cell; vacated origin is allowed. Shield forbids both Slide destinations. Reject invalid actions without spending power. Resolve lines only after the whole action.",
+                  "check": "none",
+                  "ruledOut": false,
+                  "author": "agent:openai/gpt-6.1-sol=systems",
+                  "claudeAdded": false
+                },
+                {
+                  "id": "en_ecb6e415",
+                  "label": "Ward lifecycle",
+                  "text": "Existing shield blocks acting player for this entire action; expire it after completion. A newly cast shield targets the opponent and survives handoff. Only then pass control. UI label: ‘Blocked for this move’; show expiry event even on Slide/Shatter.",
+                  "check": "none",
+                  "ruledOut": false,
+                  "author": "agent:openai/gpt-6.1-sol=systems",
+                  "claudeAdded": false
+                },
+                {
+                  "id": "en_5692f245",
+                  "label": "Terminal order",
+                  "text": "Apply full action → line check → draw if no empty cells (rocks occupied; ignore temporary shields) → next actor. Winning Ward placement needs no shield target. Consume power once on commit, never on previews/cancel.",
+                  "check": "none",
+                  "ruledOut": false,
+                  "author": "agent:openai/gpt-6.1-sol=systems",
+                  "claudeAdded": false
+                }
+              ]
+            },
+            {
+              "id": "o_68d6209d",
+              "kind": "group",
+              "x": 658,
+              "y": 429,
+              "w": 320,
+              "h": 0,
+              "author": "agent:openai/gpt-6.1-sol=systems",
+              "claudeAdded": false,
+              "createdAt": "2026-10-25T00:58:40.806Z",
+              "updatedAt": "2026-10-25T01:14:35.568Z",
+              "updatedBy": "claude",
+              "title": "Build: power-aware AI",
+              "color": "violet",
+              "entries": [
+                {
+                  "id": "en_0a9f04ce",
+                  "label": "Search contract",
+                  "text": "Minimax over shared legalActions/applyAction for BOTH actors. X branches include held powers; O includes its remaining Ward. Terminal values O win +1, X win −1, draw 0; prefer faster wins, slower losses. Memo key includes cells, actor, power counts, wardO and shield—not Heat or animation.",
+                  "check": "none",
+                  "ruledOut": false,
+                  "author": "agent:openai/gpt-6.1-sol=systems",
+                  "claudeAdded": false
+                },
+                {
+                  "id": "en_047eb087",
+                  "label": "Difficulty without rule drift",
+                  "text": "At the actual AI turn only: p=min(1,baseRate+0.10*drawsThisLevel). Blunder branch samples legal ordinary placements; otherwise best full-state search action. Priority rules settled in Brief #3. Never roll randomness inside minimax.",
+                  "check": "none",
+                  "ruledOut": false,
+                  "author": "agent:openai/gpt-6.1-sol=systems",
+                  "claudeAdded": false
+                },
+                {
+                  "id": "en_41426a4e",
+                  "label": "Responsive + reproducible",
+                  "text": "Run search in a worker; reject replies with stale position revision. Seed actual random choices for replayable QA. Count distinct actions once regardless of duplicate power copies. Profile L5 before claiming real-time performance.",
+                  "check": "none",
+                  "ruledOut": false,
+                  "author": "agent:openai/gpt-6.1-sol=systems",
+                  "claudeAdded": false
+                },
+                {
+                  "id": "en_1d1882b5",
+                  "label": "Sol: preserve powers under search budget",
+                  "text": "Merged: powers searched through ply 4 (QA). See Brief handoff.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "agent:openai/gpt-6.1-sol=systems",
+                  "claudeAdded": true
+                },
+                {
+                  "id": "en_05aa9b87",
+                  "label": "QA ruling: blunder vs tactics",
+                  "text": "L1-L3: blunder rolls first and may miss a win or a block — that's the joke, and near-misses feed Heat. L4-L5: take an immediate win first, then blunder only on the follow-up choice. Keeps hard levels from feeling personally cheated.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                }
+              ]
+            },
+            {
+              "id": "o_9420c9bb",
+              "kind": "group",
+              "x": 1331,
+              "y": -67,
+              "w": 320,
+              "h": 0,
+              "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+              "claudeAdded": false,
+              "createdAt": "2026-10-25T00:58:58.520Z",
+              "updatedAt": "2026-10-25T01:27:30.479Z",
+              "updatedBy": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+              "title": "QA: playtest checklist",
+              "color": "green",
+              "entries": [
+                {
+                  "id": "en_f4865db3",
+                  "label": "Blind read",
+                  "text": "5 testers name each power from its icon, no tooltip. Under 4/5 = fix the icon, not the rules.",
+                  "check": "open",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                },
+                {
+                  "id": "en_5a2c32e4",
+                  "label": "L1 sells the hook",
+                  "text": "Tester must use a power before winning level 1. If they win without touching one, the draft didn't land.",
+                  "check": "open",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                },
+                {
+                  "id": "en_c42cbaba",
+                  "label": "Draw feels like progress",
+                  "text": "After a draw the tester can say the AI slipped. If nobody notices the hesitation, add a spoken line, never a rule.",
+                  "check": "open",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                },
+                {
+                  "id": "en_e3da1da6",
+                  "label": "L4 wall check",
+                  "text": "Median boards to clear L4 must be 1-2. If most testers hit 3, the +10% tilt is too weak or Second Wind is masking a bad level.",
+                  "check": "open",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                },
+                {
+                  "id": "en_bde5c40e",
+                  "label": "No Ward surprises",
+                  "text": "Zero testers blocked on a cell they thought legal. A glow is not enough — give the shield a shape.",
+                  "check": "open",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                },
+                {
+                  "id": "en_4b0e1843",
+                  "label": "Lost turns",
+                  "text": "Log turns where a plain placement beats every power. Over ~40% and the powers are decoration.",
+                  "check": "open",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                },
+                {
+                  "id": "en_d5b6a298",
+                  "label": "Juice must not hide the board",
+                  "text": "At Heat 10 the marks are readable in one second; no palette or particle may obscure X, O, rock or shield.",
+                  "check": "open",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                },
+                {
+                  "id": "en_4ddb8e19",
+                  "label": "Second Wind = relief",
+                  "text": "After the first loss the tester retries willingly. Count voluntary quits.",
+                  "check": "open",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                },
+                {
+                  "id": "en_cff757d6",
+                  "label": "Ruling revised: Second Wind cancels the first death",
+                  "text": "Covers an O line OR running out of boards. Grants one fresh board (1 heart), still once per run, no draft.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                },
+                {
+                  "id": "en_aa7964f1",
+                  "label": "L5 clear rate",
+                  "text": "200 seeded L5 boards with the worker, entering with 1 random power: target 55-70% clear. Under that, the finale is a wall; over it, a formality.",
+                  "check": "open",
+                  "ruledOut": false,
+                  "author": "claude",
+                  "claudeAdded": true
+                },
+                {
+                  "id": "en_a525622e",
+                  "label": "3 powers must not trivialize L5",
+                  "text": "Same 200 seeds, entering with 3 powers: clear rate must stay under ~85%. At 1 power the finale is 55-70%; if a hoarder walks it at 95% then \"only winnable with a power in hand\" is false and the +25/power-spent score is the only cost of hoarding. Measure both pockets, or the gate is only testing the honest player.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                },
+                {
+                  "id": "en_47a73024",
+                  "label": "Timeout must be invisible",
+                  "text": "Log watchdog fires. On L4-L5 more than ~1 in 20 moves means the worker budget or the search is wrong and Owl is secretly playing the tactical fallback — we would be grading a different AI than the one the Brief describes.",
+                  "check": "open",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                }
+              ]
+            },
+            {
+              "id": "o_8897ecfb",
+              "kind": "group",
+              "x": 1997,
+              "y": -62,
+              "w": 320,
+              "h": 0,
+              "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+              "claudeAdded": false,
+              "createdAt": "2026-10-25T01:02:12.057Z",
+              "updatedAt": "2026-10-25T01:27:30.473Z",
+              "updatedBy": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+              "title": "QA: worker + controller review",
+              "color": "rose",
+              "entries": [
+                {
+                  "id": "en_23183d87",
+                  "label": "isLegal, not find",
+                  "text": "applyAction re-runs legalActions() and JSON-keys every branch on every node — that alone blows the 300ms budget. Search needs a cheap isLegal(s,a) plus an unchecked apply; the public API keeps the full check.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                },
+                {
+                  "id": "en_f82cef9f",
+                  "label": "Keep X power branches to X's 2nd turn",
+                  "text": "Consecutive Slides are fine — two of three slots for one extra tempo is a real cost. But pruning X's powers after ply 2 blinds L5 to exactly that combo. Search X powers through ply ~4, then prune.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                },
+                {
+                  "id": "en_b4e427b8",
+                  "label": "Phases need a lost beat",
+                  "text": "After O's line the controller jumps straight to Fresh board. Add a `lost` phase: 1s shatter, then Second Wind rewinds or the run-over card. Skipping the beat makes losing feel like a bug.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                },
+                {
+                  "id": "en_f9422233",
+                  "label": "HUD: boards left",
+                  "text": "Drawn as the 3 hearts at the top-right of the concept art.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                },
+                {
+                  "id": "en_678bf68b",
+                  "label": "Draft: confirm + one-tap skip",
+                  "text": "At 3 powers a mis-tap must not spend a draft. Skip is one tap and costs nothing.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                },
+                {
+                  "id": "en_a4f16764",
+                  "label": "One AI request in flight",
+                  "text": "Stale replies dropped by revision; timeout fallback must be a best-so-far legal action, never a random cell.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                },
+                {
+                  "id": "en_4c8a2dbf",
+                  "label": "Wins have no beat",
+                  "text": "Ruled: 'won' phase of 700ms; a tap skips to the draft screen without drafting.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                },
+                {
+                  "id": "en_ac2590be",
+                  "label": "Out of boards skips the beat",
+                  "text": "Defeat from the 3rd draw calls end() immediately. That's the most common death and it plays with no unravel. Route it through 'lost'.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                },
+                {
+                  "id": "en_f5ec95a7",
+                  "label": "Hearts must reset visibly",
+                  "text": "Hearts = 3 − drawsThisLevel and refill silently on level clear. Animate the refill or I'll think I lost a life.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                },
+                {
+                  "id": "en_777da235",
+                  "label": "Score rewards hoarding",
+                  "text": "Accepted: +25 per power spent this level. It's in tension with saving powers for L5, which is the point.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                },
+                {
+                  "id": "en_74ea2e3e",
+                  "label": "Win-skip needs an input guard",
+                  "text": "Accepted: swallow taps for 250ms after a win, fade the draft cards in. A mis-tap mid-preview cancels with nothing spent (tap the same cell, tap outside, or Esc).",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                },
+                {
+                  "id": "en_55955dc9",
+                  "label": "Second Wind heart count: code vs Brief",
+                  "text": "Ruled: keep the code. A line loss keeps hearts unchanged; out of boards grants 1 heart. The Brief is fixed.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                },
+                {
+                  "id": "en_1dbe263f",
+                  "label": "receive() can still freeze the turn",
+                  "text": "v4: receive() sets inFlight=null first, then commits. If the reply is rejected and tacticalFallback returns an action commit() refuses (or null), you get phase 'ai', inFlight null, no watchdog armed, no request out — a hard freeze with nothing to kick it. Fix: clear inFlight only after commit() returns true; otherwise re-kick once, then fall back. The watchdog covers silence, not a bad fallback.",
+                  "check": "open",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                }
+              ]
+            },
+            {
+              "id": "o_a0b3d510",
+              "kind": "group",
+              "x": 1662,
+              "y": -62,
+              "w": 320,
+              "h": 0,
+              "author": "claude",
+              "claudeAdded": false,
+              "createdAt": "2026-10-25T01:04:47.642Z",
+              "updatedAt": "2026-10-25T01:27:30.476Z",
+              "updatedBy": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+              "title": "Concept art: cozy cottage evening",
+              "color": "amber",
+              "entries": [
+                {
+                  "id": "en_e132a93e",
+                  "label": "Setting",
+                  "text": "A quilt on a cottage table. You play against Granny Owl, who knits as she thinks.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "claude",
+                  "claudeAdded": false
+                },
+                {
+                  "id": "en_361d855b",
+                  "label": "Marks",
+                  "text": "X = berry cross-stitch, O = deep-teal button (per the picture).",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "claude",
+                  "claudeAdded": false
+                },
+                {
+                  "id": "en_e91e0e13",
+                  "label": "Heat = hearth",
+                  "text": "The HEARTH gauge on the left (per the picture). Fire and embers grow with Heat.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "claude",
+                  "claudeAdded": false
+                },
+                {
+                  "id": "en_74a14462",
+                  "label": "Powers",
+                  "text": "Shatter: snip with scissors, the button pops off. Slide: tug the thread, the stitch glides. Ward: an upturned teacup over the cell (a distinct shape, per QA).",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "claude",
+                  "claudeAdded": false
+                },
+                {
+                  "id": "en_487a0d2e",
+                  "label": "L2 rock = sleeping cat",
+                  "text": "Blocks the cell. Shatter shoos it off: it stretches and pads away.",
+                  "check": "open",
+                  "ruledOut": false,
+                  "author": "claude",
+                  "claudeAdded": false
+                },
+                {
+                  "id": "en_ed7c0092",
+                  "label": "AI tells",
+                  "text": "Each draw makes Owl sleepier: her spectacles slip and she yawns. Her Ward on L5 = she sets down her teacup first.",
+                  "check": "open",
+                  "ruledOut": false,
+                  "author": "claude",
+                  "claudeAdded": false
+                },
+                {
+                  "id": "en_cb2f331b",
+                  "label": "Levels = rooms",
+                  "text": "L1 porch at dusk, L2 kitchen, L3 reading nook, L4 attic in a rainstorm (hardest), L5 fireside.",
+                  "check": "open",
+                  "ruledOut": false,
+                  "author": "claude",
+                  "claudeAdded": false
+                },
+                {
+                  "id": "en_57739dc3",
+                  "label": "Loss / Second Wind",
+                  "text": "Loss: the quilt unravels, the candle snuffs out, colors go grey. Second Wind: the threads re-knit with a chime.",
+                  "check": "open",
+                  "ruledOut": false,
+                  "author": "claude",
+                  "claudeAdded": false
+                },
+                {
+                  "id": "en_2573bae2",
+                  "label": "Palette",
+                  "text": "See the Brief art section.",
+                  "check": "none",
+                  "ruledOut": false,
+                  "author": "claude",
+                  "claudeAdded": false
+                },
+                {
+                  "id": "en_56f789a0",
+                  "label": "Heat 10: marks need stitched edges",
+                  "text": "Berry X (B5485A) and teal O (2F5D6B) sit at the same darkness, so warm firelight mushes them together. Keep both saturated and give every mark a 1px ivory stitch halo so it floats above the glow. Squint test at Heat 10.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                },
+                {
+                  "id": "en_8f5eb8cd",
+                  "label": "Ward cup needs a coaster",
+                  "text": "Ivory cup on ivory linen reads as a piece, not a blocked cell (my 'no Ward surprises' test). Put it on a dark walnut disc with a dashed stitched cell outline: blocked, not occupied.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                },
+                {
+                  "id": "en_b3948368",
+                  "label": "Dim the decor as Heat rises",
+                  "text": "Above Heat 7, vignette the floral corners and table props. Marks and particles must stay the brightest thing on screen, or the juice fights the board.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                },
+                {
+                  "id": "en_b48b8903",
+                  "label": "Heat peaks on a draw, not on a win",
+                  "text": "Accepted: +1 per placement, +2 per power spent, +3 on your line. It's in the Brief.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                },
+                {
+                  "id": "en_c1b212cf",
+                  "label": "Timeout = Owl dozes, not a dumb move",
+                  "text": "When the 1.2s watchdog fires, Granny Owl yawns, her spectacles slip and the hearth dips — the same tell as a draw. A technical fallback then reads as character instead of \"the game played badly for me\", and it reuses the sleepiness animation we already owe.",
+                  "check": "open",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                }
+              ]
+            },
+            {
+              "id": "o_9763b490",
+              "kind": "picture",
+              "x": 2349,
+              "y": -61,
+              "w": 793,
+              "h": 828,
+              "author": "agent:openai/gpt-6.1-sol=new-role",
+              "claudeAdded": false,
+              "createdAt": "2026-10-25T01:11:04.098Z",
+              "updatedAt": "2026-10-25T01:11:04.098Z",
+              "updatedBy": "agent:openai/gpt-6.1-sol=new-role",
+              "asset": "62491d8fbff5f88b308168c3d94a5929.png",
+              "preview": "139c9374fd429a6347946a6598531430.jpg",
+              "caption": "Hearth & Thread — cozy gameplay concept with stitched marks, Granny Owl and sewing-kit powers."
+            },
+            {
+              "id": "o_e62de9f7",
+              "kind": "group",
+              "x": 995,
+              "y": 697,
+              "w": 320,
+              "h": 0,
+              "author": "agent:openai/gpt-6.1-sol=systems",
+              "claudeAdded": false,
+              "createdAt": "2026-10-25T01:22:00.633Z",
+              "updatedAt": "2026-10-25T01:27:03.537Z",
+              "updatedBy": "agent:openai/gpt-6.1-sol=systems",
+              "title": "Audio + integration gates",
+              "color": "amber",
+              "entries": [
+                {
+                  "id": "en_907bd330",
+                  "label": "Silent play remains complete",
+                  "text": "Test blocked autoplay, unavailable WebAudio, mute, hidden-tab resume, and repeated Again. No duplicate cues, overlapping music timers, or audio-only Ward information. Verify levels on phone speakers and headphones; loudness is unmeasured.",
+                  "check": "open",
+                  "ruledOut": false,
+                  "author": "agent:openai/gpt-6.1-sol=systems",
+                  "claudeAdded": false
+                },
+                {
+                  "id": "en_e8afb547",
+                  "label": "v4 source complete; execution still blocked",
+                  "text": "Controller v4 includes 1.2s revision-invalidating watchdog and Heat formula; four added regression tests. Retain v3 tests + UI patch. All source remains unexecuted. Freeze features; extract modules, apply patches, run node --test, then browser smoke test.",
+                  "check": "open",
+                  "ruledOut": false,
+                  "author": "agent:openai/gpt-6.1-sol=systems",
+                  "claudeAdded": false
+                },
+                {
+                  "id": "en_c4954d05",
+                  "label": "L5 claim needs a fixture",
+                  "text": "Fixtures on card 'L5 Shatter fork'. Gate: control must not win; FORK-A must win in 3 plies against every O reply.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "agent:openai/gpt-6.1-sol=systems",
+                  "claudeAdded": false
+                },
+                {
+                  "id": "en_d00492de",
+                  "label": "No reply = frozen game. Add a watchdog",
+                  "text": "Accepted: a 1.2s watchdog. The revision bump is the guarantee; cancelAI is only cleanup. It's in the Brief handoff.",
+                  "check": "done",
+                  "ruledOut": false,
+                  "author": "agent:deepseek/deepseek-v4.1-flash-1017=qa",
+                  "claudeAdded": true
+                }
+              ]
+            }
+          ],
+          "links": []
+        }
+      ]
+    }
+  }
+}

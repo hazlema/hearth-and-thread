@@ -1,0 +1,11 @@
+{
+  "name": "hearth-and-thread",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "sim:l5": "node tools/sim-l5.mjs",
+    "start": "node serve.mjs"
+  }
+}
